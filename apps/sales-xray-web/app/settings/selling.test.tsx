@@ -3,6 +3,10 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
 
 import { readMe, type Desk } from "../leads/leads-client";
+import {
+  WorkspaceAccessContext,
+  type WorkspaceAccessValue,
+} from "../workspace-access";
 import { SellingSettings } from "./selling";
 
 vi.mock("../leads/leads-client", () => ({ readMe: vi.fn() }));
@@ -82,4 +86,57 @@ it("opens the checked-list setup from Phone setup's Set up", async () => {
   window.removeEventListener("sx-capture-setup-open", listen);
   // From the top, never at a step: Settings runs the whole list again.
   expect(asked).toEqual([null]);
+});
+
+/** The lead desk read fails (a 502), inside the given workspace (or none known). */
+async function renderFailed(kind: "personal" | "organisation" | null) {
+  vi.mocked(readMe).mockRejectedValue(new Error("502"));
+  const access: WorkspaceAccessValue | null = kind
+    ? {
+        status: "ready",
+        authenticated: true,
+        workspaces: [
+          {
+            tenant_id: "tenant",
+            kind,
+            name: "Fictional Homes",
+            role: null,
+            sales_xray_enabled: true,
+          },
+        ],
+        context: {
+          personId: "person",
+          sessionId: "session",
+          tenantId: "tenant",
+        },
+        retry: () => undefined,
+      }
+    : null;
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  await act(async () => {
+    root?.render(
+      <WorkspaceAccessContext.Provider value={access}>
+        <SellingSettings />
+      </WorkspaceAccessContext.Provider>,
+    );
+  });
+}
+
+it("says the settings didn't load on a 502, even before the workspace is known", async () => {
+  await renderFailed(null);
+  expect(host.textContent).toContain("Your selling settings didn't load");
+  expect(host.textContent).not.toContain("Leads work inside an organisation");
+});
+
+it("says the settings didn't load on a 502 in an organisation", async () => {
+  await renderFailed("organisation");
+  expect(host.textContent).toContain("Your selling settings didn't load");
+});
+
+it("sends a personal workspace to its organisation for leads", async () => {
+  await renderFailed("personal");
+  expect(host.textContent).toContain("Leads work inside an organisation");
+  expect(host.textContent).not.toContain("didn't load");
 });

@@ -1040,3 +1040,32 @@
     background: var(--sx-fill-soft);
   }
 }
+
+/* Disconnect Facebook entirely: the sheet's words (owner bug reports 111, 112). */
+.disconnectBody {
+  display: grid;
+  gap: 8px;
+}
+
+.disconnectBody p {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+}
+
+.disconnectBody .disconnectNote {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+/* Its button: a quiet row, not a fill, in plain ink until it asks. */
+.disconnectAll {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  text-align: start;
+  cursor: pointer;
+}
