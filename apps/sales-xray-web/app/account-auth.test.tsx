@@ -179,6 +179,27 @@ it("returns to the staged call with the same selected file and no navigation", a
   expect(fetcher).not.toHaveBeenCalled();
 });
 
+it("gives the signed-out sign-in page a way back on the web and in the phone app", async () => {
+  // Device test, iPhone app, 25 Nov 2026: Sign in was a dead end in the app.
+  vi.stubGlobal("fetch", vi.fn());
+  await act(async () =>
+    root.render(
+      <ThemeProvider controlEnabled>
+        <AccountAuth onAuthenticated={vi.fn()} previewState="auth.email" />
+      </ThemeProvider>,
+    ),
+  );
+  await flush();
+  const back = Array.from(
+    host.querySelectorAll<HTMLAnchorElement>("a[href='/']"),
+  ).map((link) => [link.textContent?.trim(), link.className]);
+  expect(back).toContainEqual([
+    "Return to app",
+    expect.stringContaining("sx-web-only"),
+  ]);
+  expect(back).toContainEqual(["Back", expect.stringContaining("sx-app-only")]);
+});
+
 it("keeps the theme switch in its own slot so phones can float it onto the banner", async () => {
   vi.stubGlobal("fetch", vi.fn());
   await act(async () =>

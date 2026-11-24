@@ -1152,9 +1152,18 @@ export function AccountAuth({
               <ArrowLeft size={16} aria-hidden="true" /> Back to your call
             </button>
           ) : !selectedFile ? (
-            <Link className={`${styles.returnLink} sx-web-only`} href="/">
-              <ArrowLeft size={16} aria-hidden="true" /> Return to app
-            </Link>
+            <>
+              <Link className={`${styles.returnLink} sx-web-only`} href="/">
+                <ArrowLeft size={16} aria-hidden="true" /> Return to app
+              </Link>
+              {/* The phone app has no browser back and no tab bar here: without
+                  this, Sign in was a dead end and "Analyse a call without an
+                  account" on Home could not be reached (device test, iPhone
+                  app, 25 Nov 2026). */}
+              <Link className={`${styles.returnLink} sx-app-only`} href="/">
+                <ArrowLeft size={16} aria-hidden="true" /> Back
+              </Link>
+            </>
           ) : (
             <span />
           )}
