@@ -286,3 +286,21 @@
   min-width: 0;
   border-top: 1px solid var(--sx-hairline);
 }
+
+/* Small phones: a card's name stays whole; its action moves under it when
+   both don't fit ("API keys" was cut to "API ke…" at 320 px, radar 25 Nov). */
+@media (max-width: 400px) {
+  .head {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .title {
+    flex: 1 1 auto;
+    min-width: min(9em, 100%);
+  }
+
+  .head > :last-child {
+    margin-left: auto;
+  }
+}
