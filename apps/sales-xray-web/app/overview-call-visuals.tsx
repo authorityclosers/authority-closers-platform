@@ -35,6 +35,37 @@ function smooth(points: Array<[number, number]>): string {
   return path;
 }
 
+/** A call-map key in plain words: "price_concern" reads "Price concern" (25 Nov 2026: keys showed raw). */
+export function keyWords(key: string): string {
+  const words = key.replace(/_/g, " ").trim();
+  return words ? words[0].toUpperCase() + words.slice(1) : words;
+}
+
+const OUTCOME_WORDS: Record<string, string> = {
+  won: "Won",
+  lost: "Lost",
+  follow_up: "Follow-up",
+  disqualified: "Not a fit",
+  none: "Not decided",
+};
+const RUNG_WORDS: Record<string, string> = {
+  none: "None",
+  vague: "Vague",
+  dated_call: "A call with a date",
+  invite_sent: "Invite sent",
+  committed: "Committed",
+};
+const INTENSITY_WORDS: Record<string, string> = {
+  low: "Low",
+  med: "Medium",
+  high: "High",
+};
+const ROLE_WORDS: Record<string, string> = {
+  seller: "Seller",
+  prospect: "Prospect",
+  other: "Someone else",
+};
+
 function shareChartSegments(series: Array<number | null>) {
   const segments: Array<Array<[number, number]>> = [];
   series.forEach((share, index) => {
@@ -122,6 +153,13 @@ export function OverviewCallVisuals({
   const speakerIds = speakerEntries.map(([id]) => id);
   const name = (id: string) =>
     nameOf?.(id) || speakerN(Math.max(0, speakerIds.indexOf(id)));
+  // A pain's speaker: their name on this call, else their role, never the raw id ("speaker_1").
+  const raisedBy = (id: string) =>
+    nameOf?.(id) ||
+    ROLE_WORDS[
+      callMap?.speakers.find((s) => s.speaker_id === id)?.role ?? ""
+    ] ||
+    name(id);
 
   return (
     <div className={styles.visualsRoot} data-overview-call-visuals>
@@ -385,7 +423,9 @@ export function OverviewCallVisuals({
                     key={`${phase.name}-${idx}`}
                     className={styles.phaseCard}
                   >
-                    <span className={styles.phaseName}>{phase.name}</span>
+                    <span className={styles.phaseName}>
+                      {keyWords(phase.name)}
+                    </span>
                     <button
                       type="button"
                       className={styles.playButton}
@@ -407,11 +447,17 @@ export function OverviewCallVisuals({
             <div className={styles.outcomeRow}>
               <div className={styles.keyVal}>
                 <small>Outcome kind</small>
-                <b>{callMap.outcome.kind}</b>
+                <b>
+                  {OUTCOME_WORDS[callMap.outcome.kind] ??
+                    keyWords(callMap.outcome.kind)}
+                </b>
               </div>
               <div className={styles.keyVal}>
                 <small>Next-step rung</small>
-                <b>{callMap.outcome.next_step_rung}</b>
+                <b>
+                  {RUNG_WORDS[callMap.outcome.next_step_rung] ??
+                    keyWords(callMap.outcome.next_step_rung)}
+                </b>
               </div>
               <PlayControl
                 startMs={resolveEvidenceStartMs(
@@ -439,7 +485,9 @@ export function OverviewCallVisuals({
                           ? "Forward signal"
                           : "Risk signal"}
                       </span>
-                      <span className={styles.signalKind}>{signal.kind}</span>
+                      <span className={styles.signalKind}>
+                        {keyWords(signal.kind)}
+                      </span>
                     </div>
                     <p className={styles.signalText}>{signal.text}</p>
                     <PlayControl
@@ -470,19 +518,19 @@ export function OverviewCallVisuals({
                     <div key={pain.id} className={styles.painCard}>
                       <div className={styles.painTop}>
                         <span className={styles.painRaised}>
-                          Raised by: <b>{pain.raised_by}</b>
+                          Raised by: <b>{raisedBy(pain.raised_by)}</b>
                         </span>
                         <span className={styles.painMeta}>
-                          {pain.prospect_intensity} intensity · {pain.times}×
+                          {INTENSITY_WORDS[pain.prospect_intensity] ??
+                            pain.prospect_intensity}{" "}
+                          intensity · {pain.times}×
                         </span>
                       </div>
                       <p className={styles.painText}>{pain.text}</p>
                       <div className={styles.addressedBox}>
                         <small>Addressed by pitch item:</small>
                         <span>
-                          {linkedPitch
-                            ? linkedPitch.text
-                            : (pain.addressed_by ?? "Not addressed")}
+                          {linkedPitch ? linkedPitch.text : "Not addressed"}
                         </span>
                       </div>
                       <PlayControl

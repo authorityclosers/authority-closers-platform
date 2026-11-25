@@ -259,3 +259,39 @@ it("computes overrun from the promise evidence time and preserves an unresolved 
   expect(host.textContent).toContain("Computed overrununavailable");
   expect(host.textContent).not.toContain("No overrun");
 });
+
+it("reads the call map in plain words, never its keys or speaker ids (25 Nov 2026)", async () => {
+  const callMap = parseCallMap(
+    fixture.call_map,
+    fixture.segments,
+    fixture.duration_ms,
+  )!;
+  await act(async () =>
+    root.render(
+      <OverviewCallVisuals
+        transcript={{
+          ...transcript,
+          segments: fixture.segments,
+          duration_ms: 660_000,
+        }}
+        callMap={callMap}
+        onSeek={() => undefined}
+      />,
+    ),
+  );
+  const text = host.textContent ?? "";
+  expect(text).toContain("Raised by: Prospect");
+  expect(text).toContain("Medium intensity");
+  expect(text).toContain("Price concern");
+  expect(text).toContain("Decision maker absent");
+  expect(text).toContain("Follow-up");
+  expect(text).toContain("A call with a date");
+  for (const key of [
+    "speaker_1",
+    "price_concern",
+    "follow_up",
+    "dated_call",
+    "med intensity",
+  ])
+    expect(text).not.toContain(key);
+});
