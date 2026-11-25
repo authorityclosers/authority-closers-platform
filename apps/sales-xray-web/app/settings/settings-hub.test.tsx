@@ -222,6 +222,7 @@ it("gives a seller recording on, who they are, short rows, Look and Sign out", a
   ]);
   expect(rows("This phone")).toEqual([
     "/settings/notifications",
+    "/settings/call-uploads",
     "/settings/devices",
   ]);
   // A seller still reaches the team, the company and analysis time; no billing.

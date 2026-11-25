@@ -62,6 +62,7 @@ export type SettingsSectionId =
   | "developers"
   | "pulse"
   | "devices"
+  | "call-uploads"
   | "help";
 
 export type SettingsGroup =
@@ -285,6 +286,15 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     label: "Phone & alerts",
     hint: "Phone setup, alerts, vibration and usage analytics",
     icon: BellRing,
+    group: "This phone",
+  },
+  {
+    // SX-AUTOUPLOAD (owner, 25 Nov 2026: "fix that feature"): whether this phone's lead calls upload by
+    // themselves, the last one, what waits and what failed (Retry), the folder and mobile data.
+    id: "call-uploads",
+    label: "Call uploads",
+    hint: "Last upload, waiting and failed calls, recordings folder",
+    icon: PhoneCall,
     group: "This phone",
   },
   {

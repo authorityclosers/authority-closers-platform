@@ -122,6 +122,7 @@ it("maps every section, and the old account sections, to an address of its own",
     ["Just me", "privacy"],
     ["Just me", "help"],
     ["This phone", "notifications"],
+    ["This phone", "call-uploads"],
     ["This phone", "devices"],
   ]);
   // Organisation → Connections → Pulse (25 Oct 2026) lives in the organisation hub.

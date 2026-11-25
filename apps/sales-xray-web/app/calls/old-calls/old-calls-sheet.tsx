@@ -41,6 +41,7 @@ import { track, type TelemetryEvents } from "../../telemetry";
 import { Button } from "../../ui/kit";
 import { markHandled, markLooked, scanOldCalls } from "./old-calls-client";
 import {
+  LOOK_BACK_DAYS,
   ROW_WORDS,
   autoCalls,
   buckets,
@@ -335,7 +336,7 @@ export function OldCallsSheet({
             <h2>Looking for your old calls</h2>
             <ol className={styles.scanSteps}>
               <li>Your call history: lead calls with no recording</li>
-              <li>Your recordings folder: the last 14 days</li>
+              <li>Your recordings folder: the last {LOOK_BACK_DAYS} days</li>
               <li>Matching each call to its recording…</li>
             </ol>
             <p className={styles.note}>Nothing is uploaded yet.</p>
@@ -372,7 +373,7 @@ export function OldCallsSheet({
             <p className={styles.note}>
               {scan?.missing
                 ? `${scan.missing} lead calls had no recording, and your phone has none for them.`
-                : "Every lead call of the last 14 days already has its recording."}
+                : `Every lead call of the last ${LOOK_BACK_DAYS} days already has its recording.`}
             </p>
             <div className={styles.actions}>
               <Button variant="primary" onClick={close}>
@@ -386,7 +387,7 @@ export function OldCallsSheet({
           <section className={styles.hero}>
             {calls.length ? (
               <>
-                <p className={styles.eyebrow}>Last 14 days</p>
+                <p className={styles.eyebrow}>Last {LOOK_BACK_DAYS} days</p>
                 <h2>
                   <span className={styles.count}>{calls.length}</span>{" "}
                   {headline(calls.length).replace(/^\d+ /, "")}

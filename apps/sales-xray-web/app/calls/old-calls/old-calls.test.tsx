@@ -96,10 +96,10 @@ it("joins only the server's calls without a recording to the phone's matches", (
   expect(parseFound({ nope: 1 })).toBeNull();
 });
 
-it("looks back 14 India days and keeps each missing call once", () => {
+it("looks back 30 India days and keeps each missing call once", () => {
   const days = lookBackDays(new Date("2026-11-20T20:00:00Z"));
   expect(days[0]).toBe("2026-11-21");
-  expect(days).toHaveLength(14);
+  expect(days).toHaveLength(30);
   expect(mergeMissing([missing, missing.slice(0, 1), null])).toHaveLength(3);
 });
 
