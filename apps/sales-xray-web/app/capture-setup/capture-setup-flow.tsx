@@ -645,9 +645,11 @@ function RecordingsStep({
       key: "folder",
       label: "Recordings folder chosen",
       done: facts.folderPicked,
+      // Name the folder and the two taps (SX-AUTOUPLOAD, 25 Nov 2026: sellers picked "Recordings" while the
+      // dialer saved to "Music/Recordings/Call Recordings", so nothing ever uploaded; judged design U2).
       say: facts.folderPicked
         ? "Chosen."
-        : "Not yet: Android opens it for you.",
+        : folderHint(status.recorder?.folders),
     },
     { key: "test", label: "10-second test call", done: proven, say: testSay },
   ];
@@ -1262,6 +1264,19 @@ function DoneStep({
  *  update only when this build really can't upload (bug report #164: the
  *  Google Play app was told to update from Google Play when the phone was
  *  only slow to answer). */
+
+/** "Not yet: Android opens MIUI / sound_recorder / call_rec (12 recordings). Tap Use this folder, then Allow." */
+export function folderHint(
+  folders: ReadonlyArray<{ path: string; recordings: number }> | undefined,
+): string {
+  const found = folders?.find((folder) => folder.recordings > 0);
+  if (!found) return "Not yet: Android opens it for you.";
+  const path = found.path.split("/").filter(Boolean).join(" / ");
+  const count =
+    found.recordings === 1 ? "1 recording" : `${found.recordings} recordings`;
+  return `Not yet: Android opens ${path} (${count}). Tap Use this folder, then Allow.`;
+}
+
 export function phoneStepWords(
   inApp: boolean,
   status: SetupStatus | null,

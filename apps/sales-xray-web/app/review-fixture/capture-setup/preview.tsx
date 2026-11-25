@@ -88,7 +88,17 @@ function phone(step: string) {
         maker: "xiaomi",
         dialerLabel: google ? "Phone by Google" : "Phone (Xiaomi)",
         recording: recorderOff ? "off" : "on",
-        folders: [],
+        // The folder Android's picker opens at, named on the folder step (SX-AUTOUPLOAD, 25 Nov 2026).
+        folders:
+          step === "recordings"
+            ? [
+                {
+                  path: "MIUI/sound_recorder/call_rec",
+                  state: "hidden",
+                  recordings: 12,
+                },
+              ]
+            : [],
         otherDialers: [],
         newestMs: Date.now() - 12 * 60_000,
       },
