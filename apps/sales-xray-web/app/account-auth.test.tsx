@@ -1037,7 +1037,9 @@ describe("Apple and Facebook next to Google", () => {
     const started = new URL(assign.mock.calls[0][0], window.location.origin);
     expect(started.pathname).toBe("/v1/auth/pulse/start");
     expect(started.searchParams.get("action")).toBe("authenticate");
-    expect(host.textContent).toContain("Finish sign-in in the Vitals OS window.");
+    expect(host.textContent).toContain(
+      "Finish sign-in in the Vitals OS window.",
+    );
   });
 
   it("tells an older phone app to update before Apple or Facebook, and never opens a window", async () => {
