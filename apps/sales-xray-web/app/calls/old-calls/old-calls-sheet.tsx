@@ -39,7 +39,13 @@ import {
 } from "../../settings/auto-analysis-client";
 import { track, type TelemetryEvents } from "../../telemetry";
 import { Button } from "../../ui/kit";
-import { markHandled, markLooked, scanOldCalls } from "./old-calls-client";
+import {
+  markAgreed,
+  markHandled,
+  markLooked,
+  readAgreed,
+  scanOldCalls,
+} from "./old-calls-client";
 import {
   LOOK_BACK_DAYS,
   ROW_WORDS,
@@ -266,9 +272,12 @@ export function OldCallsSheet({
         setPhase("empty");
         return;
       }
-      // Standing consent on: the sure and likely matches start by themselves.
+      // Standing consent on: the sure and likely matches start by themselves, once the seller chose the first
+      // time on this phone (owner, 25 Nov 2026: "show the count and ask once before uploading; then continuous").
       const first =
-        consentPath(standing) === "auto" ? autoCalls(outcome.scan.calls) : [];
+        consentPath(standing) === "auto" && readAgreed()
+          ? autoCalls(outcome.scan.calls)
+          : [];
       if (first.length && terms) {
         track("sx.old_calls", {
           stage: "auto_started",
@@ -419,6 +428,7 @@ export function OldCallsSheet({
                     disabled={!canSend}
                     onClick={() => {
                       say("chose_all", { found: calls.length });
+                      markAgreed();
                       void run([...calls], how, auto, leads, policy);
                     }}
                   >
@@ -497,7 +507,10 @@ export function OldCallsSheet({
               <Button
                 variant="primary"
                 disabled={!canSend || !pickedCalls.length}
-                onClick={() => void run(pickedCalls, how, auto, leads, policy)}
+                onClick={() => {
+                  markAgreed();
+                  void run(pickedCalls, how, auto, leads, policy);
+                }}
               >
                 {pickedCalls.length === 1
                   ? "Analyse 1 call"

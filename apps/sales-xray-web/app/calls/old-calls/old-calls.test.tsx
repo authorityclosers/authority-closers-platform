@@ -249,7 +249,30 @@ it("asks once, with nothing ticked, when automatic analysis is off", async () =>
   );
 });
 
+it("first look under standing consent shows the count and asks once; nothing goes up before the tap", async () => {
+  localStorage.removeItem("sx:old-calls:agreed");
+  vi.mocked(scanOldCalls).mockResolvedValue(scanned());
+  vi.mocked(readAutoAnalysis).mockResolvedValue({
+    schema: "sales-xray-auto-analysis/1",
+    state: "on",
+    can_start: true,
+  });
+  act(() =>
+    root.render(<OldCallsSheet open entry="card" onClose={() => undefined} />),
+  );
+  await settle();
+  expect(runRecordingUpload).not.toHaveBeenCalled();
+  const all = button(/Analyse all 3/);
+  expect(all?.disabled).toBe(false);
+  act(() => all!.click());
+  await settle();
+  expect(runRecordingUpload).toHaveBeenCalledTimes(3);
+  expect(localStorage.getItem("sx:old-calls:agreed")).not.toBeNull();
+});
+
 it("analyses sure and likely matches by itself under standing consent, never the time-only one", async () => {
+  // The seller chose once before on this phone; from then on it is continuous.
+  localStorage.setItem("sx:old-calls:agreed", "1");
   vi.mocked(scanOldCalls).mockResolvedValue(scanned());
   vi.mocked(readAutoAnalysis).mockResolvedValue({
     schema: "sales-xray-auto-analysis/1",
