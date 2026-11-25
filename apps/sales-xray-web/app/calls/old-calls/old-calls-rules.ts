@@ -303,3 +303,29 @@ export function cardWords(state: { scannedAt: number | null; fresh: number }): {
 export function quietLookDue(lastAt: number | null, now: number): boolean {
   return lastAt === null || now - lastAt >= QUIET_EVERY_MS || now < lastAt;
 }
+
+/**
+ * The phone number in a recording's file name, as a lead search (its last ten digits), or "" when it names none.
+ * Assign to a lead opens on it (SX-AUTOUPLOAD, Redmi test 25 Nov 2026: calls made before their lead was added stay
+ * off the lead's history, so their recordings come back unplaced, and "Rohan Test(0091…)_20261125175246.mp3" should
+ * find Rohan Test in one tap). The recorder's date and time are left out first, as the phone's RecordingMatch does:
+ * 20261125175246, 2026-11-25 17-52-46, 261125_175246 (Samsung).
+ */
+export function numberInName(name: string): string {
+  const base = name
+    .replace(/\.[A-Za-z0-9]{1,5}$/, "")
+    .replace(
+      /(?<!\d)20\d\d[-_]?(?:0[1-9]|1[0-2])[-_]?(?:0[1-9]|[12]\d|3[01])[-_ T]?(?:[01]\d|2[0-3])[-_.:]?[0-5]\d[-_.:]?[0-5]\d(?!\d)/,
+      " ",
+    )
+    .replace(
+      /(?<!\d)\d\d(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])_(?:[01]\d|2[0-3])[0-5]\d[0-5]\d(?!\d)/,
+      " ",
+    );
+  const runs = base.match(/\d{7,}/g) ?? [];
+  const longest = runs.reduce(
+    (best, run) => (run.length > best.length ? run : best),
+    "",
+  );
+  return longest.slice(-10);
+}

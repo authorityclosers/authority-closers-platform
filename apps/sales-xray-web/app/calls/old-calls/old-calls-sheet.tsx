@@ -55,6 +55,7 @@ import {
   consentWord,
   fitWord,
   headline,
+  numberInName,
   progressLine,
   type OldCall,
   type OldCallsScan,
@@ -698,7 +699,8 @@ function AssignPanel({
   onCancel: () => void;
   onPlaced: (item: Unplaced) => void;
 }) {
-  const [query, setQuery] = useState("");
+  // A number in the file name (MIUI, Oppo): its lead comes up first, one tap away.
+  const [query, setQuery] = useState(() => numberInName(item.recording.name));
   const [found, setFound] = useState<LeadRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);

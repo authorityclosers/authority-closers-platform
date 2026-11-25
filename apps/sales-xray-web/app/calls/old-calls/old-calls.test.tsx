@@ -16,6 +16,7 @@ import {
   joinFound,
   lookBackDays,
   mergeMissing,
+  numberInName,
   parseFound,
   quietLookDue,
   type OldCallsScan,
@@ -289,4 +290,22 @@ it("analyses sure and likely matches by itself under standing consent, never the
   expect(vi.mocked(runRecordingUpload).mock.calls[0]![0].consent).toBe(
     "standing",
   );
+});
+
+it("finds the phone number in a recording's name for Assign to a lead, leaving the recorder's clock out", () => {
+  // MIUI, as on the Redmi test (25 Nov 2026): contact or number, the number in brackets, then the call's start.
+  expect(numberInName("Rohan Test(00919000000555)_20261125174118.mp3")).toBe(
+    "9000000555",
+  );
+  expect(
+    numberInName("00919000000555(00919000000555)_20261125175246.mp3"),
+  ).toBe("9000000555");
+  expect(numberInName("+919000000555_2026-11-25 17-52-46.m4a")).toBe(
+    "9000000555",
+  );
+  // Samsung's short clock and a contact name: no number to search.
+  expect(numberInName("Call recording Rohan Test_261125_175246.m4a")).toBe("");
+  expect(numberInName("Recording 7.m4a")).toBe("");
+  // A short number stays whole.
+  expect(numberInName("1800123456_20261125175246.amr")).toBe("1800123456");
 });
