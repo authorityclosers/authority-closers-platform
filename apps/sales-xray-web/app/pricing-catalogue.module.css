@@ -102,9 +102,9 @@
 
 .placeholder {
   min-height: 300px;
-  border: 1px solid var(--lx-line, #d8e0e9);
+  border: 1px solid var(--sx-line);
   border-radius: var(--lx-radius-md, 14px);
-  background: var(--lx-surface, #ffffff);
+  background: var(--sx-surface);
   opacity: 0.6;
 }
 
