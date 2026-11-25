@@ -58,11 +58,19 @@ export function PricingCatalogue({ initialPlans }: { initialPlans?: Plan[] }) {
     return () => controller.abort();
   }, [initialPlans]);
 
+  // The plans' own space is kept while they load, so nothing below jumps when
+  // they arrive (WEB-DEBUG, 25 Nov 2026: /pricing layout shift 0.452 on a
+  // computer; the three live plans are ~1,000 px tall).
   if (state.status === "loading")
     return (
-      <p className={styles.notice} role="status">
-        Loading plans.
-      </p>
+      <div className={styles.catalogue} aria-busy="true">
+        <p className={styles.notice} role="status">
+          Loading plans.
+        </p>
+        {[0, 1, 2].map((index) => (
+          <div className={styles.placeholder} key={index} aria-hidden="true" />
+        ))}
+      </div>
     );
   if (state.status === "error")
     return (
