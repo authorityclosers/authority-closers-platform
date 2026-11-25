@@ -158,6 +158,7 @@ import { DueSoonWatch } from "../leads/due-soon";
 import { PushKeeper } from "./push-keeper";
 import { AfterCallGuard } from "./after-call-guard";
 import { MissedAlert } from "./missed-alert";
+import { UploadReask } from "./upload-reask";
 import { LeadsTabIcon, useLeadsBadgeWords } from "../leads/leads-badge";
 import { ReviewBarChip, ReviewRailLink } from "../review/review-badge";
 import {
@@ -2407,6 +2408,8 @@ function LightboxShellFrame({
         accountKey={updatesContextKey}
         openLead={navigateEvent}
       />
+      {/* "Your call wasn't checked" (owner, 17 Nov 2026): a lead call ended with uploads off here. */}
+      <UploadReask accountKey={updatesContextKey} openLead={navigateEvent} />
       {authenticated ? (
         <Sheet
           open={workspaceSheetOpen}

@@ -513,10 +513,36 @@ def funnels(rows: Sequence[Row]) -> list[dict[str, Any]]:
             ("outcome", "Saved an outcome", _people(rows, lambda r: r.event == "sx.outcome_set")),
         ]
     )
+    # A call the phone saw with uploads off (owner, 17 Nov 2026: "upload/analysis required",
+    # asked again after a call with no upload): the card shown, its steps started, uploads on.
+    reask = _funnel(
+        [
+            (
+                "shown",
+                "Shown a call that wasn't checked",
+                _people(rows, lambda r: _feature(r, "upload_reask_shown")),
+            ),
+            (
+                "started",
+                "Started turning uploads on",
+                _people(rows, lambda r: _feature(r, "upload_reask_started")),
+            ),
+            (
+                "on",
+                "Turned uploads on",
+                _people(rows, lambda r: _feature(r, "upload_reask_on")),
+            ),
+        ]
+    )
     return [
         {"key": "report", "label": "From a report to an outcome", "steps": report},
         {"key": "leads", "label": "From Leads to an outcome", "steps": leads},
+        {"key": "upload_reask", "label": "From a call not checked to uploads on", "steps": reask},
     ]
+
+
+def _feature(row: Row, name: str) -> bool:
+    return row.event == "sx.feature_used" and row.payload.get("feature") == name
 
 
 # Features, by what shows they were used.

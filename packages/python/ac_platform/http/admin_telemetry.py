@@ -13,6 +13,10 @@ GET /v1/admin/telemetry/speed?window=24h|7d|30d[&app=web|android]
 GET /v1/admin/telemetry/daily[?day=YYYY-MM-DD]
     One India day's export for the cost optimiser: each analysed call's cost joined to how
     its report was used, and per-workspace tallies (telemetry/daily_export.py).
+GET /v1/admin/telemetry/upload-funnel?window=24h|7d|30d
+    Lead calls reaching analysis (owner, 17 Nov 2026): sellers calling, set up with uploads
+    on and uploading; connected lead calls seen and uploaded. Counts only, from the records
+    themselves, not usage analytics (call_ai/upload_funnel.py).
 
 The improvement loop (owner, 24 Oct 2026: "use in our recursive improvement pipeline each
 new update"; telemetry/improvement.py):
@@ -46,6 +50,7 @@ from anyio.to_thread import run_sync
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import PlainTextResponse
 
+from ac_platform.call_ai import upload_funnel
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationError,
@@ -281,6 +286,20 @@ def install_admin_telemetry_http(application: FastAPI, ctx: RouteContext) -> Non
                 },
             )
         return data
+
+    @router.get("/upload-funnel")
+    async def upload_funnel_view(
+        request: Request,
+        response: Response,
+        window: Literal["24h", "7d", "30d"] = "7d",
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        """Lead calls reaching analysis (owner, 17 Nov 2026: "upload/analysis required"):
+        sellers calling, set up with uploads on and uploading; calls seen and uploaded.
+        Counts only, every real organisation, test leads and sandboxes left out."""
+        await admit(request, response, auth)
+        found = await upload_funnel.read(auth.database, now=datetime.now(UTC), window=window)
+        return {**found, "environment": settings.environment}
 
     @router.get("/daily")
     async def daily(
