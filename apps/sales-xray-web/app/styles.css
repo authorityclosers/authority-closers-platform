@@ -3412,6 +3412,12 @@ html[data-sx-app] .sx-web-only {
   display: none !important;
 }
 
+/* Only inside the phone app: what stands in for the website's chrome there
+   (the signed-out sign-in page's Back, device test 25 Nov 2026). */
+html:not([data-sx-app]) .sx-app-only {
+  display: none !important;
+}
+
 /* Press feedback (press-feedback.tsx; owner, 24 Oct 2026: taps felt slow):
    whatever is pressed dims at once, before its work is done. */
 [data-sx-pressed] {

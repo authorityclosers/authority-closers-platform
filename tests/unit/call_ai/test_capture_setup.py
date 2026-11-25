@@ -225,3 +225,14 @@ def test_team_says_whether_a_phone_records_and_the_fix() -> None:
     off = {"checks": {"recordings": True, "recorder": False}}
     assert capture_setup.recording_state(off, recent, now)["fix"] == "recorder"  # type: ignore[index]
     assert capture_setup.recording_state(None, None, now) is None
+
+
+def test_sellers_must_and_owners_and_admins_only_when_they_call() -> None:
+    # Owner, 17 Nov 2026: required in onboarding, never a hard block for those who don't call.
+    for role in ("member", "manager"):
+        assert capture_setup.required_for(role, calls_leads=False) is True
+    for role in ("owner", "admin"):
+        assert capture_setup.required_for(role, calls_leads=False) is False
+        assert capture_setup.required_for(role, calls_leads=True) is True
+    for role in ("viewer", "finance"):
+        assert capture_setup.required_for(role, calls_leads=True) is False

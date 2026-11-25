@@ -19,7 +19,7 @@ import { parseRecording, type NativeRecording } from "../../leads/native-phone";
 import type { AutoAnalysis } from "../../settings/auto-analysis-client";
 
 /** How far back the look goes, in India days (today included). */
-export const LOOK_BACK_DAYS = 14;
+export const LOOK_BACK_DAYS = 30;
 /** The quiet look on Calls runs at most this often. */
 export const QUIET_EVERY_MS = 6 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -277,7 +277,7 @@ export function cardWords(state: { scannedAt: number | null; fresh: number }): {
   if (state.scannedAt === null)
     return {
       title: "Find my old calls",
-      note: "Your phone may have recorded calls with your leads in the last 14 days.",
+      note: `Your phone may have recorded calls with your leads in the last ${LOOK_BACK_DAYS} days.`,
       button: "Look now",
       quiet: false,
     };

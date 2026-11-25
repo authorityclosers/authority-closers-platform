@@ -19,7 +19,25 @@ import {
 } from "./auto-analysis-client";
 import { AutoCapturePanel } from "./auto-capture-panel";
 import { AutoAnalysisSheet } from "./auto-analysis-sheet";
+import { autoCaptureSetup, autoCaptureStatus } from "../leads/native-phone";
 import styles from "./sections.module.css";
+
+/**
+ * Agreeing again after the upload terms changed (SX-AUTOUPLOAD, production 16 Nov 2026: the provider switch made
+ * every phone stop its uploads, and agreeing again here left them stopped). When this phone stopped its uploads
+ * for that reason only, turning them back on follows the agreement: Android shows its own Turn on words first.
+ * A seller who turned uploads off themselves is left as they chose.
+ */
+export async function resumeAfterAgreeing(): Promise<void> {
+  const status = await autoCaptureStatus();
+  if (!status?.supported || status.on) return;
+  if (status.health !== "consent" && status.health !== "terms") return;
+  try {
+    await autoCaptureSetup(true, status.wifiOnly);
+  } catch {
+    // Not now, or the profile is incomplete: the uploads panel below says what is left.
+  }
+}
 
 export function AutoAnalysisPanel() {
   const [view, setView] = useState<AutoAnalysis | "loading" | "failed">(
@@ -106,7 +124,10 @@ export function AutoAnalysisPanel() {
       <AutoAnalysisSheet
         open={asking}
         onClose={() => setAsking(false)}
-        onSaved={setView}
+        onSaved={(next) => {
+          setView(next);
+          if (next.state === "on") void resumeAfterAgreeing();
+        }}
       />
     </Panel>
   );

@@ -175,10 +175,17 @@ def install_capture_setup_http(application: FastAPI, ctx: RouteContext) -> None:
         found = await capture_setup.setup(auth.database, tenant_id, person_id)
         no = capture_setup.last_no(found, consent.state, consent.at)
         again = capture_setup.ask_again_at(no)
+        # An owner or admin who doesn't call leads is never held at the setup.
+        caller = role in capture_setup.SELLER_ROLES or (
+            role in capture_setup.REQUIRED_ROLES
+            and await capture_setup.calls_leads(
+                auth.database, tenant_id, person_id, datetime.now(UTC)
+            )
+        )
         return {
             "schema": SCHEMA,
             "workspace": "organisation",
-            "required": role in capture_setup.REQUIRED_ROLES,
+            "required": capture_setup.required_for(role, calls_leads=caller),
             "profile_complete": await profile_complete(auth, person_id),
             "consent": consent.state,
             "consent_since": consent.at.isoformat() if consent.at else None,

@@ -454,11 +454,23 @@
     padding-bottom: 4px;
   }
 
+  /* 44 px taps on phones (WEB-DEBUG audit, 25 Nov 2026: the pills and the
+     brand link were 29 px and 21 px tall). */
   .toc > ul > li > a {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 14px;
     border: 1px solid var(--sx-line);
     border-radius: 999px;
     background: var(--sx-surface);
     white-space: nowrap;
+  }
+
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
   }
 
   .doc {

@@ -69,16 +69,16 @@ it("requires a second explicit unlink and shows the connect action afterwards", 
   await act(async () => root.render(<PulsePanel />));
   await tap("Unlink");
   expect(unlinkPulse).not.toHaveBeenCalled();
-  await tap("Unlink from Pulse?");
+  await tap("Unlink from Vitals OS?");
   expect(unlinkPulse).toHaveBeenCalledOnce();
-  expect(host.textContent).toContain("Connect your Pulse org");
+  expect(host.textContent).toContain("Connect Vitals OS");
 });
 it("offers the connect action for an unlinked organisation", async () => {
   vi.mocked(readPulse).mockResolvedValue({ ...linked, link: null });
   await act(async () => root.render(<PulsePanel />));
   expect(
     [...host.querySelectorAll("button")].find((button) =>
-      button.textContent?.includes("Connect your Pulse org"),
+      button.textContent?.includes("Connect Vitals OS"),
     )?.disabled,
   ).toBe(false);
   expect(syncPulse).not.toHaveBeenCalled();
@@ -86,7 +86,7 @@ it("offers the connect action for an unlinked organisation", async () => {
 it("never leaves the part blank when Pulse isn't offered here", async () => {
   vi.mocked(readPulse).mockResolvedValue(null);
   await act(async () => root.render(<PulsePanel />));
-  expect(host.querySelector('[aria-label="Pulse"]')?.textContent).toContain(
+  expect(host.querySelector('[aria-label="Vitals OS"]')?.textContent).toContain(
     "Not available for this organisation yet.",
   );
   expect(host.querySelector("button")).toBeNull();

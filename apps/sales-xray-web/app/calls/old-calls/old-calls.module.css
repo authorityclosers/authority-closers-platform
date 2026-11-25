@@ -298,3 +298,8 @@
   color: var(--sx-bad);
   font-size: var(--sx-text-sm);
 }
+
+/* Every tap in the sheet is at least 44 px tall (SX-AUTOUPLOAD judge, 25 Nov 2026: the kit's buttons are 40). */
+.sheet button {
+  min-height: 44px;
+}

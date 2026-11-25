@@ -1371,9 +1371,11 @@ span.evidenceWaveform {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* Three across while the labels fit; with large text on a small phone they
+     take two rows instead of running past the screen (v1.99, bug radar). */
   .metrics {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 5rem), 1fr));
   }
 
   .metrics > div {

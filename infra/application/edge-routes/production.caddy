@@ -125,8 +125,9 @@
 	# api.salesxray.in carries only the API: every client, and the providers' callbacks and
 	# webhooks. mcp.salesxray.in is where AI assistants connect (/v1/mcp); both describe
 	# themselves for OAuth (RFC 9728) and name app.salesxray.in as where people sign in.
-	# salesxray.in and www are the landing site's; until it exists they, and any page asked
-	# of the API or MCP host, go to the app (302: the landing page will take the root).
+	# salesxray.in is the landing site (Cloudflare Pages since 10 Nov 2026, so it no longer
+	# reaches this edge; its rules stay for a fallback). A page asked of the API or MCP host
+	# goes to the app (302). www goes to the landing site (below).
 	@production_sales_xray_api_host {
 		host api.salesxray.in mcp.salesxray.in
 		path /v1 /v1/* /.well-known/oauth-protected-resource /.well-known/oauth-protected-resource/*
@@ -138,8 +139,21 @@
 		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
 		reverse_proxy ac-production-api:8000
 	}
+	# www (WEB-DEBUG audit, 25 Nov 2026): typing www.salesxray.in skipped the landing page, its
+	# trial words and its film, and opened the app. A page visit there now moves (301) to the
+	# same address on salesxray.in. Other methods keep the plain answer below. no-store: neither
+	# browsers nor Cloudflare keep the move, so taking it out works at once.
+	@production_sales_xray_www_pages {
+		host www.salesxray.in
+		method GET HEAD
+	}
+	handle @production_sales_xray_www_pages {
+		import base_security_headers
+		header Cache-Control "no-store"
+		redir https://salesxray.in{uri} 301
+	}
 	@production_sales_xray_domain_pages {
-		host salesxray.in www.salesxray.in api.salesxray.in mcp.salesxray.in
+		host salesxray.in api.salesxray.in mcp.salesxray.in
 		method GET HEAD
 	}
 	handle @production_sales_xray_domain_pages {

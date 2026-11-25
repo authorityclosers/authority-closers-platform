@@ -36,6 +36,12 @@ ACTION: Final = "sales_xray.capture_setup.v1"
 ASK_AGAIN_AFTER: Final = timedelta(days=1)
 # Who sells, so who goes through it: not Viewers or Finance, who change nothing.
 REQUIRED_ROLES: Final = frozenset({"owner", "admin", "manager", "member"})
+# Who must, whatever they do: the sellers. An owner or admin must only once they call
+# leads themselves (owner, 17 Nov 2026: call upload and analysis are required, settled in
+# onboarding; the app is never hard-blocked for owners and admins who don't call).
+SELLER_ROLES: Final = frozenset({"manager", "member"})
+# A lead call this recent makes an owner or admin a caller.
+CALLER_WITHIN: Final = timedelta(days=30)
 # Enough history for every phone a seller has used; older events are kept, only not read.
 _READ_LIMIT: Final = 200
 
@@ -341,6 +347,31 @@ async def team(database: Any, tenant_id: UUID, people: list[UUID]) -> dict[UUID,
     for row in rows:
         grouped.setdefault(str(row.resource_id), []).append(row)
     return {person: _fold(grouped.get(str(person), [])[:_READ_LIMIT]) for person in people}
+
+
+def required_for(role: str, *, calls_leads: bool) -> bool:
+    """Whether the setup is required before Home, Leads and Calls: always for a seller
+    (manager or member); for an owner or admin only when they call leads themselves."""
+    if role in SELLER_ROLES:
+        return True
+    return role in REQUIRED_ROLES and calls_leads
+
+
+async def calls_leads(database: Any, tenant_id: UUID, person_id: UUID, now: datetime) -> bool:
+    """This person logged a lead call here within CALLER_WITHIN (one bounded read)."""
+    from ac_platform.lead_desk.models import LeadEvent  # lead_desk imports call_ai
+
+    found = await database.scalar(
+        select(LeadEvent.id)
+        .where(
+            LeadEvent.tenant_id == tenant_id,
+            LeadEvent.kind == "call",
+            LeadEvent.actor_person_id == person_id,
+            LeadEvent.created_at >= now - CALLER_WITHIN,
+        )
+        .limit(1)
+    )
+    return found is not None
 
 
 def last_no(found: Setup, consent: str, consent_since: datetime | None) -> datetime | None:

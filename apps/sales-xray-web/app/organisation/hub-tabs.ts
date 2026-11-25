@@ -75,7 +75,7 @@ export const HUB_TABS: readonly HubTab[] = [
   {
     id: "connections",
     label: "Connections",
-    note: "Lead ads, WhatsApp and Instagram, AI replies, API keys, Pulse",
+    note: "Lead ads, WhatsApp and Instagram, AI replies, API keys, Vitals OS",
     icon: Plug,
     href: "/settings/apps",
     managers: true,

@@ -77,6 +77,27 @@ function install() {
     if (!url.includes("/v1/lead-desk/")) return real(input, init);
     if (url.includes("/leads/delete"))
       return answer({ deleted: 0, lead_ids: [], not_found: 0 });
+    // Assign to… reads the team: answer it as the team, not as a lead list.
+    if (new URL(url, window.location.href).pathname.endsWith("/lead-desk/team"))
+      return answer({
+        reps: ["Asha Fictional", "Ravi Fictional"].map((name, index) => ({
+          person_id: `fictional-rep-${index + 1}`,
+          name,
+          role: "seller",
+          revision: 1,
+          available: true,
+          max_open: null,
+          languages: [],
+          areas: [],
+          interests: [],
+        })),
+        settings: {
+          revision: 1,
+          auto_reassign: false,
+          reassign_minutes: 30,
+          default_country: "IN",
+        },
+      });
     return answer({
       schema: "lead-desk/1",
       leads: rows,

@@ -57,6 +57,13 @@ const reasons: Record<
       "Automatic analysis is off for you or its terms changed. Turn it on, then turn uploads on below.",
     fix: null,
   },
+  // Apps #40 (25 Nov 2026): new upload terms hold calls on the phone instead of turning uploads off.
+  terms: {
+    title: "Agree to the new upload terms",
+    body: (calls) =>
+      `${waiting(calls)} Sales X-Ray's upload terms changed. Agree to them under Analyse my calls automatically and they upload by themselves.`,
+    fix: null,
+  },
   notices: {
     title: "Automatic uploads turned off",
     body: () =>

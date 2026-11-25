@@ -357,7 +357,8 @@ export function BillingView({
                       ? `${count(minutes(allowance.committedSeconds))} min used or reserved by analyses.`
                       : allowance
                         ? allowance.allowanceSeconds > 0
-                          ? `of ${count(minutes(allowance.allowanceSeconds))} min in total (plan, free trial and top-ups)`
+                          ? // Given, used and left in one place (owner ask, 18 Nov 2026).
+                            `of ${count(minutes(allowance.allowanceSeconds))} min in total (plan, free trial and top-ups) · ${count(minutes(allowance.committedSeconds))} min used`
                           : "available analysis time"
                         : ""}
                   </span>
