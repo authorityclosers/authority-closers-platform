@@ -109,7 +109,9 @@ export function UploadReaskPreview() {
     }
     uploadsOn = false;
     installPhone();
-    setReady(true);
+    // The card mounts once the stand-in phone is in place (next task, not in the effect).
+    const timer = window.setTimeout(() => setReady(true), 0);
+    return () => window.clearTimeout(timer);
   }, []);
   // Walk to the asked stage by pressing the card's own buttons.
   useEffect(() => {
