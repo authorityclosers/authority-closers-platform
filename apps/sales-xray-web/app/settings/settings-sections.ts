@@ -188,8 +188,8 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   {
     // Owner, 25 Oct 2026: an organisation links its Pulse org.
     id: "pulse",
-    label: "Pulse",
-    hint: "Your team's profiles from Pulse, and what you share with it",
+    label: "Vitals OS",
+    hint: "Your team's profiles from Vitals OS, and what you share with it",
     icon: Link2,
     group: "Connections",
     needs: "org.manage",
@@ -259,7 +259,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     // (Pulse, ChatGPT, Claude) had no screen; everyone, members too.
     id: "ai-apps",
     label: "AI apps",
-    hint: "ChatGPT, Claude and Pulse with your calls and leads",
+    hint: "ChatGPT, Claude and Vitals OS with your calls and leads",
     icon: Sparkles,
     group: "Just me",
   },

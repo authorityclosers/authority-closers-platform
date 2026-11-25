@@ -141,7 +141,7 @@ export function PulsePanel() {
 
   if (loaded.state === "loading")
     return (
-      <Panel title="Pulse">
+      <Panel title="Vitals OS">
         <SkeletonRow avatar={36} lines={2} />
       </Panel>
     );
@@ -149,20 +149,20 @@ export function PulsePanel() {
   // Pulse isn't offered to this organisation, say so in one calm card.
   if (loaded.state === "hidden")
     return (
-      <section className={styles.hero} aria-label="Pulse">
+      <section className={styles.hero} aria-label="Vitals OS">
         <PulseTile size={44} />
         <div className={styles.heroText}>
-          <h2>Pulse</h2>
+          <h2>Vitals OS</h2>
           <p>Not available for this organisation yet.</p>
         </div>
       </section>
     );
   if (loaded.state === "failed")
     return (
-      <Panel title="Pulse">
+      <Panel title="Vitals OS">
         <Empty
           icon={RefreshCw}
-          title="Pulse didn't load"
+          title="Vitals OS didn't load"
           action={{ label: "Try again", onClick: () => void load() }}
         />
       </Panel>
@@ -178,13 +178,13 @@ export function PulsePanel() {
     <div data-pulse-panel="" className={styles.stack}>
       {/* One calm card: the mark, whether it's linked, and its one action
           (owner, 29 Oct 2026). */}
-      <section className={styles.hero} aria-label="Pulse">
+      <section className={styles.hero} aria-label="Vitals OS">
         <PulseTile size={44} />
         <div className={styles.heroText}>
           <h2>
             {link
-              ? `Linked to ${link.orgName ?? "your Pulse org"}`
-              : "Connect Pulse"}
+              ? `Linked to ${link.orgName ?? "your Vitals OS organisation"}`
+              : "Connect Vitals OS"}
           </h2>
           <p>
             {link
@@ -198,8 +198,8 @@ export function PulsePanel() {
                   .filter(Boolean)
                   .join(" · ")
               : pulse.configured
-                ? "Your team's names, photos, titles and teams come from Pulse. Roles here never change."
-                : "Pulse isn't set up for this Sales X-Ray yet."}
+                ? "Your team's names, photos, titles and teams come from Vitals OS. Roles here never change."
+                : "Vitals OS isn't set up for this Sales X-Ray yet."}
           </p>
           {link?.lastSync.problem ? (
             <p className={styles.problem}>
@@ -214,7 +214,7 @@ export function PulsePanel() {
                 className={styles.chip}
                 disabled={busy !== null}
                 onClick={() =>
-                  void run("sync", syncPulse, "Read again from Pulse")
+                  void run("sync", syncPulse, "Read again from Vitals OS")
                 }
               >
                 <RefreshCw size={14} aria-hidden="true" />
@@ -231,11 +231,11 @@ export function PulsePanel() {
                     return;
                   }
                   setConfirmUnlink(false);
-                  void run("unlink", unlinkPulse, "Unlinked from Pulse");
+                  void run("unlink", unlinkPulse, "Unlinked from Vitals OS");
                 }}
               >
                 <Unplug size={14} aria-hidden="true" />
-                {confirmUnlink ? "Unlink from Pulse?" : "Unlink"}
+                {confirmUnlink ? "Unlink from Vitals OS?" : "Unlink"}
               </Button>
             </>
           ) : (
@@ -250,7 +250,7 @@ export function PulsePanel() {
               }
             >
               <Link2 size={14} aria-hidden="true" />
-              {busy === "link" ? "Opening Pulse…" : "Connect your Pulse org"}
+              {busy === "link" ? "Opening Vitals OS…" : "Connect Vitals OS"}
             </Button>
           )}
         </div>
@@ -258,7 +258,7 @@ export function PulsePanel() {
 
       {link ? (
         <Panel
-          title="Your team in Pulse"
+          title="Your team in Vitals OS"
           sub={`${matched.length} of ${pulse.members.length} here`}
           className={styles.fit}
           tools={
@@ -281,7 +281,7 @@ export function PulsePanel() {
           }
         >
           {pulse.members.length ? (
-            <List label="Pulse members">
+            <List label="Vitals OS members">
               {pulse.members.map((member) => (
                 <Row
                   key={member.id}
@@ -292,18 +292,18 @@ export function PulsePanel() {
                       size={32}
                     />
                   }
-                  title={member.name ?? member.email ?? "A Pulse member"}
+                  title={member.name ?? member.email ?? "A Vitals OS member"}
                   meta={[
                     [member.title, member.team].filter(Boolean).join(" · "),
-                    member.pulseRole ? `Pulse ${member.pulseRole}` : null,
+                    member.pulseRole ? `Vitals OS ${member.pulseRole}` : null,
                   ]}
                   end={
                     member.status === "left" ? (
-                      <Badge>Left Pulse</Badge>
+                      <Badge>Left Vitals OS</Badge>
                     ) : member.personId ? (
                       <Badge tone="good">
                         {member.matchedBy === "pulse_sign_in"
-                          ? "Signs in with Pulse"
+                          ? "Signs in with Vitals OS"
                           : "Matched by email"}
                       </Badge>
                     ) : member.invitedAt ? (
@@ -321,7 +321,7 @@ export function PulsePanel() {
             <Empty
               icon={UsersRound}
               title="No members read yet"
-              text="Press Sync now to read your Pulse org's members."
+              text="Press Sync now to read your Vitals OS members."
             />
           )}
         </Panel>
@@ -334,15 +334,15 @@ export function PulsePanel() {
           className={`${styles.fit} ${styles.share}`}
         >
           <SwitchRow
-            label="Names, job titles and teams from Pulse (read)"
+            label="Names, job titles and teams from Vitals OS (read)"
             hint="What the link is for. Unlink to stop it."
             checked
             disabled
             onChange={() => undefined}
           />
           <SwitchRow
-            label="Photos from Pulse (read)"
-            hint="Off removes Pulse photos here; people's own uploads stay."
+            label="Photos from Vitals OS (read)"
+            hint="Off removes Vitals OS photos here; people's own uploads stay."
             checked={link.sharing.photos === "read"}
             disabled={busy !== null}
             onChange={(on) =>
@@ -355,7 +355,7 @@ export function PulsePanel() {
             }
           />
           <SwitchRow
-            label="Work counts to Pulse (write)"
+            label="Work counts to Vitals OS (write)"
             hint="Calls analysed, leads worked, follow-ups done and talk minutes per person per day. Never call content, transcripts or lead details."
             checked={link.sharing.signals === "write"}
             disabled={busy !== null}
@@ -372,12 +372,12 @@ export function PulsePanel() {
       ) : null}
 
       <Panel
-        title="Pulse's access here"
+        title="Vitals OS access here"
         sub="Allowed by each person"
         className={styles.fit}
       >
         {access.length ? (
-          <List label="Pulse connections">
+          <List label="Vitals OS connections">
             {access.map((item) => (
               <Row
                 key={item.id}
@@ -403,7 +403,7 @@ export function PulsePanel() {
                           await revokePulseAccess(item.id);
                           return (await readPulse()) ?? undefined;
                         },
-                        "Pulse's access ended",
+                        "Vitals OS access ended",
                       )
                     }
                   >
@@ -416,8 +416,8 @@ export function PulsePanel() {
         ) : (
           <Empty
             icon={Link2}
-            title="Pulse has no access here"
-            text="People connect Sales X-Ray from Pulse → Apps; their access shows here."
+            title="Vitals OS has no access here"
+            text="People connect Sales X-Ray from Vitals OS → Apps; their access shows here."
           />
         )}
       </Panel>

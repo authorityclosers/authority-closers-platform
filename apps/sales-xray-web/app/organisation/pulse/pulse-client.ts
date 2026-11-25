@@ -179,7 +179,7 @@ async function refusal(response: Response): Promise<PulseRefusal> {
 async function answer(response: Response): Promise<PulseState> {
   if (!response.ok) throw await refusal(response);
   const state = parsePulseState(await response.json());
-  if (!state) throw new PulseRefusal("Pulse answered oddly.", 502, null);
+  if (!state) throw new PulseRefusal("Vitals OS answered oddly.", 502, null);
   return state;
 }
 
@@ -212,7 +212,7 @@ export async function startPulseLink(): Promise<string> {
   const body = (await response.json()) as { redirect_url?: unknown };
   const url = text(body.redirect_url);
   if (!url || !/^https?:\/\//.test(url))
-    throw new PulseRefusal("Pulse answered oddly.", 502, null);
+    throw new PulseRefusal("Vitals OS answered oddly.", 502, null);
   return url;
 }
 
@@ -256,15 +256,16 @@ export function pulseReturnNotice(outcome: string | null): {
     case "connected":
       return {
         tone: "success",
-        title: "Linked to Pulse",
+        title: "Linked to Vitals OS",
         message:
-          "Your team's names, photos, titles and teams now come from Pulse.",
+          "Your team's names, photos, titles and teams now come from Vitals OS.",
       };
     case "linked_sync_failed":
       return {
         tone: "success",
-        title: "Linked to Pulse",
-        message: "Reading your Pulse members didn't finish. Press Sync now.",
+        title: "Linked to Vitals OS",
+        message:
+          "Reading your Vitals OS members didn't finish. Press Sync now.",
       };
     case "cancelled":
     case "refused":
@@ -272,13 +273,14 @@ export function pulseReturnNotice(outcome: string | null): {
         tone: "error",
         title: "Not linked",
         message:
-          "Pulse didn't approve the link. A Pulse org admin must allow it.",
+          "Vitals OS didn't approve the link. A Vitals OS admin must allow it.",
       };
     case "org_taken":
       return {
         tone: "error",
         title: "Not linked",
-        message: "That Pulse org is already linked to another organisation.",
+        message:
+          "That Vitals OS organisation is already linked to another organisation.",
       };
     case "expired":
       return {
@@ -290,7 +292,7 @@ export function pulseReturnNotice(outcome: string | null): {
       return {
         tone: "error",
         title: "Not linked",
-        message: "Linking to Pulse didn't finish. Try again.",
+        message: "Linking to Vitals OS didn't finish. Try again.",
       };
   }
 }
