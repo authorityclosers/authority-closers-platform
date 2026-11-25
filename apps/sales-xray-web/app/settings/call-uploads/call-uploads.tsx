@@ -35,6 +35,7 @@ import {
   type SetupStatus,
 } from "../../leads/native-phone";
 import { notify } from "../../notice-center";
+import { OnOff } from "../../organisation/setup/on-off";
 import { Button } from "../../ui/kit";
 import { AutoAnalysisSheet } from "../auto-analysis-sheet";
 import {
@@ -212,10 +213,12 @@ export function CallUploads() {
             <li>Here, tap Upload a call and pick it from Files.</li>
           </ol>
         ) : null}
-        {where === "android" && status?.supported && top.tone !== "blocked" ? (
+        {where === "android" &&
+        status?.supported &&
+        (top.tone === "ok" || top.tone === "attention") ? (
           <dl className={styles.figures}>
             <div>
-              <dt>Uploaded today</dt>
+              <dt>Sent today</dt>
               <dd data-tone="ok">{today}</dd>
             </div>
             <div>
@@ -327,7 +330,7 @@ export function CallUploads() {
         </section>
       ) : null}
 
-      {where === "android" && status?.supported ? (
+      {where === "android" && status?.supported && top.tone !== "blocked" ? (
         <section className={styles.card} aria-label="Upload settings">
           <h3 className={styles.cardTitle}>Settings</h3>
           <div className={styles.setting}>
@@ -343,26 +346,24 @@ export function CallUploads() {
               Change
             </Button>
           </div>
-          <label className={styles.setting}>
+          <div className={styles.setting}>
             <span className={styles.rowText}>
               <strong>Upload on mobile data</strong>
               <small>
                 {wifiOnly ? "Off: waits for Wi-Fi" : "On: any network"}
               </small>
             </span>
-            <input
-              type="checkbox"
-              role="switch"
-              className={styles.switch}
-              checked={!wifiOnly}
+            <OnOff
+              label="Upload on mobile data"
+              on={!wifiOnly}
               disabled={busy}
-              onChange={(event) => {
-                const wifi = !event.target.checked;
+              onChange={(on) => {
+                const wifi = !on;
                 if (status.on) void turnOn(wifi);
                 else setStatus({ ...status, wifiOnly: wifi });
               }}
             />
-          </label>
+          </div>
           <Link className={styles.setting} href="/calls#old-calls">
             <span className={styles.rowText}>
               <strong>Find older calls</strong>

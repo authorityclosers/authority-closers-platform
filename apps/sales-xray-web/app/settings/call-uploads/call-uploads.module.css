@@ -174,10 +174,9 @@
   color: inherit;
   text-decoration: none;
 }
-.switch {
-  width: 44px;
-  height: 28px;
-  accent-color: var(--sx-accent);
+/* Every tap target here is at least 44 px tall (the kit's ghost buttons are 40). */
+.screen button {
+  min-height: 44px;
 }
 .foot {
   margin: 0;

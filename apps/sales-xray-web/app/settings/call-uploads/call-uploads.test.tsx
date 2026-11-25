@@ -273,7 +273,7 @@ describe("<CallUploads>", () => {
     phone.setup = setup("folder");
     phone.items = [];
     await render();
-    expect(host.textContent).toContain("agree to the new upload terms");
+    expect(host.textContent).toContain("Agree to the new upload terms");
     const agree = [...host.querySelectorAll("button")].find(
       (b) => b.textContent === "Read and agree",
     );
@@ -289,7 +289,7 @@ describe("<CallUploads>", () => {
     expect(host.textContent).toContain(
       "Your Phone app keeps recordings to itself",
     );
-    expect(host.textContent).not.toContain("Uploaded today");
+    expect(host.textContent).not.toContain("Sent today");
     const how = [...host.querySelectorAll("button")].find(
       (b) => b.textContent === "Show me how",
     );
@@ -302,8 +302,8 @@ describe("<CallUploads>", () => {
     phone.setup = setup("folder");
     phone.items = [];
     await render();
-    const toggle = host.querySelector<HTMLInputElement>("input[role=switch]");
-    expect(toggle?.checked).toBe(true);
+    const toggle = host.querySelector<HTMLButtonElement>("button[role=switch]");
+    expect(toggle?.getAttribute("aria-checked")).toBe("true");
     await act(async () => toggle?.click());
     expect(phone.setupCalls).toContainEqual([true, true]);
   });

@@ -151,14 +151,14 @@ export function headline(
     if (health === "consent" || health === "terms")
       return {
         tone: "off",
-        title: "Uploads stopped: agree to the new upload terms",
-        line: "Sales X-Ray's upload terms changed. Agree to them and your calls upload by themselves again.",
+        title: "Agree to the new upload terms",
+        line: "Uploads stopped when Sales X-Ray's upload terms changed. Agree and your calls upload by themselves again.",
         action: "agree",
       };
     if (health === "notices")
       return {
         tone: "off",
-        title: "Uploads stopped: notices are blocked",
+        title: "Allow upload notices",
         line: "Each call shows a notice with 60 seconds to Undo. Allow notices, then turn uploads on.",
         action: "notices",
       };
