@@ -609,11 +609,11 @@ export function OverviewCallVisuals({
                     <p className={styles.claimText}>{claim.text}</p>
                     <div className={styles.claimAttributes}>
                       <span>
-                        Verifiable: <b>{claim.verifiable}</b>
+                        Verifiable: <b>{keyWords(claim.verifiable)}</b>
                       </span>
                       {claim.seller_error ? (
                         <span>
-                          Seller error: <b>{claim.seller_error}</b>
+                          Seller error: <b>{keyWords(claim.seller_error)}</b>
                         </span>
                       ) : null}
                     </div>
