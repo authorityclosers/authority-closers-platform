@@ -2039,3 +2039,58 @@
     display: inline;
   }
 }
+
+/* The minutes left read as one unit: "(2 h 22 min)" broke after "(2". */
+.noBreak {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+/* Small phones (radar 25 Nov 2026, 320 px and large text): the top bar's
+   words ran into each other, the last plan tab ran past the edge and the
+   "Most popular" badge sat over the plan's name. */
+@media (max-width: 400px) {
+  .shellHeader {
+    gap: 8px;
+  }
+
+  .shellBrand {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .shellBrandName {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mobilePlanTabs {
+    gap: 4px;
+  }
+
+  .mobilePlanTabBtn {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 8px 4px;
+    letter-spacing: -0.01em;
+  }
+
+  /* The card's own "Most popular" badge says it; the star wrapped to a
+     second line and pushed Enterprise off the screen. */
+  .tabStar {
+    display: none;
+  }
+
+  .planCard .planBadge {
+    position: static;
+    align-self: flex-start;
+  }
+}
+
+/* Under 360 px the page's own heading names the screen: the bar keeps Back,
+   Receipts and Close. */
+@media (max-width: 359px) {
+  .shellBrand {
+    display: none;
+  }
+}

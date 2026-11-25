@@ -199,11 +199,29 @@
   .tabs {
     display: flex;
     justify-self: stretch;
+    min-width: 0;
   }
 
-  .tabs button {
-    flex: 1;
+  /* [role] outranks the family switch's own "min-width: 96px; padding 0 16px"
+     (same specificity, loaded later), which kept "Settings" past a 320 px
+     screen with large text (radar, 25 Nov 2026). */
+  .tabs[role="tablist"] button {
+    flex: 1 1 auto;
     min-width: 0;
+    padding: 0 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+@media (max-width: 360px) {
+  .tabs[role="tablist"] button {
+    padding: 0 6px;
+    font-size: 0.93em;
+  }
+
+  .tabs .tabCount {
+    margin-left: 4px;
   }
 }
 

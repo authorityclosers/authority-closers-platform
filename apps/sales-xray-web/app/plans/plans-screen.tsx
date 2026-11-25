@@ -267,11 +267,16 @@ export function PlansScreen({
                 <div className={styles.trial}>
                   <span>
                     <b>Current: {mePlan.plan.name}</b> ·{" "}
-                    {mePlan.allowance.unlimited
-                      ? `Unlimited · ${count(minutes(mePlan.allowance.committedSeconds))} min used or reserved by analyses.`
-                      : formatCurrentPlanAllowance(
+                    {mePlan.allowance.unlimited ? (
+                      `Unlimited · ${count(minutes(mePlan.allowance.committedSeconds))} min used or reserved by analyses.`
+                    ) : (
+                      // One unit: "(2 h 22 min)" broke after "(2" on a 320 px phone.
+                      <span className={styles.noBreak}>
+                        {formatCurrentPlanAllowance(
                           mePlan.allowance.availableSeconds,
                         )}
+                      </span>
+                    )}
                   </span>
                 </div>
               ) : null}
@@ -320,7 +325,9 @@ export function PlansScreen({
                   onClick={() => setMobileTab(item.key)}
                 >
                   {item.name}
-                  {item.key === "organisation" ? " ★" : ""}
+                  {item.key === "organisation" ? (
+                    <span className={styles.tabStar}> ★</span>
+                  ) : null}
                 </button>
               ))}
             </div>
