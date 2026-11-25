@@ -5935,8 +5935,10 @@ class LeadDesk:
         start = command.started_at
         if phone is None or not self.now - timedelta(days=3) <= start <= self.now:
             raise DeskError(422, "This recording's number or time cannot be matched.")
-        if not work_hours.inside(work_hours.parse(config), start):
-            raise DeskError(409, "This call is outside work hours.")
+        # A call with one of my leads uploads at any hour (owner via the Mac orchestrator,
+        # 25 Nov 2026, SX-AUTOUPLOAD: "Calls to/from a LEAD upload at ANY hour. Work hours only
+        # filter non-lead calls"); a 19:15 lead call was refused as outside work hours on launch
+        # day. Non-lead numbers are refused below.
         found = (
             await self.db.scalars(
                 select(Lead)
@@ -6041,8 +6043,12 @@ class LeadDesk:
                 .limit(PHONE_BOOK_LIMIT)
             )
         ).all()
+        # No hours for the phone's call-history filter: every installed app sends its lead calls
+        # at any hour (25 Nov 2026, SX-AUTOUPLOAD); the team's hours only keep non-lead calls out
+        # of "Save as lead?" (offer_hours).
         return PhoneBook(
-            work_hours=hours_view(work_hours.parse((await self.settings())[1]), self.now),
+            work_hours=None,
+            offer_hours=hours_view(work_hours.parse((await self.settings())[1]), self.now),
             person_id=self.viewer.person_id,
             tenant_id=self.tenant_id,
             organisation_workspace=True,
@@ -6059,11 +6065,12 @@ class LeadDesk:
         The stage and the next call stay as they are; only the seller's own
         answer changes those. Every row is taken however old it is (owner, 20 Nov 2026:
         "every call, everything needs to be there"), first read (``backfill``) or not, up to
-        PHONE_LOG_MAX_DAYS back; a row from before its lead existed stays off the lead.
+        PHONE_LOG_MAX_DAYS back; a row from before its lead existed stays off the lead. A call
+        with a lead counts at any hour (owner via the Mac orchestrator, 25 Nov 2026, SX-AUTOUPLOAD:
+        "Calls to/from a LEAD upload at ANY hour"); only lead numbers ever reach here.
         """
         _, config = await self.settings()
         country = str(config.get("default_country") or "91")
-        hours = work_hours.parse(config)
         oldest = self.now - timedelta(days=PHONE_LOG_MAX_DAYS)
         newest = self.now + timedelta(minutes=5)
         wanted: dict[UUID, tuple[PhoneLogCall, str]] = {}
@@ -6071,12 +6078,7 @@ class LeadDesk:
         skipped = already = 0
         for call in command.calls:
             phone = normalise_phone(call.number, default_country=country)
-            # Outside work hours a call is the seller's own (Salestrail): never logged.
-            if (
-                phone is None
-                or not oldest <= call.started_at <= newest
-                or not work_hours.inside(hours, call.started_at)
-            ):
+            if phone is None or not oldest <= call.started_at <= newest:
                 skipped += 1
                 continue
             key = uuid5(

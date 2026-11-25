@@ -1166,8 +1166,9 @@ def test_work_hours_hold_night_leads_and_keep_calls_on_the_phone(
     postgres_harness: Any, tmp_path: Path
 ) -> None:
     """Salestrail rows and UX study item 8, 18 Oct: a manager sets work hours. Outside
-    them a new lead waits and goes to a seller when work starts, and a call is never
-    logged. Clearing the hours gives out what waited."""
+    them a new lead waits and goes to a seller when work starts. Since 25 Nov 2026 a call
+    with a lead is logged and its recording taken at any hour (SX-AUTOUPLOAD); only non-lead
+    calls stay on the phone. Clearing the hours gives out what waited."""
     from ac_platform.lead_desk import hours
 
     async def exercise() -> None:
@@ -1231,8 +1232,12 @@ def test_work_hours_hold_night_leads_and_keep_calls_on_the_phone(
                 desk = (await client.get(BASE)).json()
                 assert desk["me"]["paused_until"] is not None
                 book = (await client.get(f"{BASE}/phone-book")).json()
-                assert book["work_hours"]["start"] == "09:30"
-                # A call now is outside work hours: it is never logged.
+                # 25 Nov 2026 (SX-AUTOUPLOAD): lead calls count at any hour, so the phone's
+                # call-history filter gets no hours; the team's hours stay for "Save as lead?"
+                # offers (newer apps).
+                assert book["work_hours"] is None
+                assert book["offer_hours"]["start"] == "09:30"
+                # A lead call now is outside work hours, and it is logged all the same.
                 seller_lead = await client.post(
                     f"{BASE}/leads",
                     json={
@@ -1277,7 +1282,20 @@ def test_work_hours_hold_night_leads_and_keep_calls_on_the_phone(
                     },
                     headers=WRITE,
                 )
-                assert (logged.json()["logged"], logged.json()["skipped"]) == (0, 1)
+                assert (logged.json()["logged"], logged.json()["skipped"]) == (1, 0), logged.text
+                # And its recording is taken outside work hours too (a 19:15 lead call was
+                # refused on launch day).
+                recorded = await client.post(
+                    f"{BASE}/recording-call",
+                    json={
+                        "command_id": str(uuid4()),
+                        "number": "9876540002",
+                        "started_at": datetime.now(UTC).isoformat(),
+                        "duration_seconds": 30,
+                    },
+                    headers=WRITE,
+                )
+                assert recorded.status_code == 200, recorded.text
 
             # Work starts: the waiting lead goes to the seller.
             async with setup.sessions() as db, db.begin():
