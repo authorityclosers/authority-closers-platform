@@ -286,12 +286,15 @@ it("reads the call map in plain words, never its keys or speaker ids (25 Nov 202
   expect(text).toContain("Decision maker absent");
   expect(text).toContain("Follow-up");
   expect(text).toContain("A call with a date");
+  expect(text).toContain("Point 1");
   for (const key of [
     "speaker_1",
     "price_concern",
     "follow_up",
     "dated_call",
     "med intensity",
+    "decision_maker",
+    "pi1",
   ])
     expect(text).not.toContain(key);
 });

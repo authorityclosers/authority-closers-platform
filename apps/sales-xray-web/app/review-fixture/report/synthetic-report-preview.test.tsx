@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 import { SyntheticReportPreview } from "./synthetic-report-preview";
 import { syntheticEvidence, syntheticReport } from "./synthetic-report";
 import fixture from "../../../tests/fixtures/call-map-v1.json";
+import { keyWords } from "../../overview-call-visuals";
 import { formatTranscriptTime } from "../../report-transcript";
 
 (
@@ -126,8 +127,8 @@ it("adds a parsed call-map fixture and resolves every source control to its own 
   ]) {
     expect(panel.textContent).toContain(heading);
   }
-  expect(panel.textContent).toContain("follow_up");
-  expect(panel.textContent).toContain("dated_call");
+  expect(panel.textContent).toContain("Follow-up");
+  expect(panel.textContent).toContain("A call with a date");
   for (const items of [
     fixture.call_map.signals,
     fixture.call_map.pains,
@@ -139,9 +140,9 @@ it("adds a parsed call-map fixture and resolves every source control to its own 
   expect(panel.textContent).toContain("180 credits per month");
   expect(panel.textContent).toContain("120 credits");
   for (const gap of fixture.call_map.qualification_gaps)
-    expect(panel.textContent).toContain(gap);
+    expect(panel.textContent).toContain(keyWords(gap));
   for (const confirmed of fixture.call_map.qualification_confirmed)
-    expect(panel.textContent).toContain(confirmed.item);
+    expect(panel.textContent).toContain(keyWords(confirmed.item));
   expect(panel.textContent).toContain("Time promised10:00");
   expect(panel.textContent).toContain("Call length00:43");
   expect(panel.textContent).toContain("No overrun");

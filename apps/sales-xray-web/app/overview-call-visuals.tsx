@@ -552,10 +552,10 @@ export function OverviewCallVisuals({
             <div className={styles.detailCard}>
               <h4 className={styles.detailTitle}>Pitch items</h4>
               <div className={styles.pitchList}>
-                {callMap.pitch_items.map((item) => (
+                {callMap.pitch_items.map((item, index) => (
                   <div key={item.id} className={styles.pitchCard}>
                     <div className={styles.pitchMeta}>
-                      <span className={styles.pitchId}>{item.id}</span>
+                      <span className={styles.pitchId}>Point {index + 1}</span>
                       <span className={styles.pitchTime}>
                         {formatClock(item.start_ms)} –{" "}
                         {formatClock(item.end_ms)}
@@ -640,7 +640,7 @@ export function OverviewCallVisuals({
                   {callMap.qualification_gaps.length > 0 ? (
                     callMap.qualification_gaps.map((gap, idx) => (
                       <span key={idx} className={styles.gapTag}>
-                        {gap}
+                        {keyWords(gap)}
                       </span>
                     ))
                   ) : (
@@ -654,7 +654,7 @@ export function OverviewCallVisuals({
                   {callMap.qualification_confirmed.length > 0 ? (
                     callMap.qualification_confirmed.map((conf, idx) => (
                       <span key={idx} className={styles.confirmedChip}>
-                        <span>{conf.item}</span>
+                        <span>{keyWords(conf.item)}</span>
                         <PlayControl
                           startMs={resolveEvidenceStartMs(
                             conf.evidence,
