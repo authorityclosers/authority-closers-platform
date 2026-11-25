@@ -217,7 +217,7 @@
 @media (max-width: 360px) {
   .tabs[role="tablist"] button {
     padding: 0 6px;
-    font-size: 0.93em;
+    font-size: var(--sx-text-xs);
   }
 
   .tabs .tabCount {
