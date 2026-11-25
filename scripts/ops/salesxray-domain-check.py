@@ -46,7 +46,7 @@ FAMILIES: dict[str, dict[str, object]] = {
         "landing": (),
     },
     # The customer domain. Since 10 Nov 2026 salesxray.in is the landing site (Cloudflare Pages, not
-    # our edge); www still forwards to the app through the edge.
+    # our edge); www forwards to it (301) through the edge (WEB-DEBUG audit, 25 Nov 2026).
     "new": {
         "app": "app.salesxray.in",
         "api": "api.salesxray.in",
@@ -163,11 +163,11 @@ def checks(
         kind = headers.get("content-type", "")
         return status == 200 and "javascript" in kind, f"{status} {kind}"
 
-    def forwards(host: str) -> Callable[[], Result]:
+    def forwards(host: str, to: str, code: int) -> Callable[[], Result]:
         def run() -> Result:
             status, headers, _ = get(host, "GET", "/leads?from=check")
             where = headers.get("location", "")
-            return status == 302 and where == f"https://{app}/leads?from=check", f"{status} {where}"
+            return status == code and where == f"https://{to}/leads?from=check", f"{status} {where}"
 
         return run
 
@@ -190,8 +190,14 @@ def checks(
         ("website-line", script),
     ]
     if forward:
-        found += [(f"forward-{host}", forwards(str(host))) for host in names["forward"]]  # type: ignore[union-attr]
-        found += [(f"forward-{host}", forwards(host)) for host in sorted({api, mcp} - {app})]
+        to_landing = [str(host) for host in names["landing"]]  # type: ignore[union-attr]
+        found += [
+            (f"forward-{host}", forwards(str(host), to_landing[0], 301))
+            for host in names["forward"]  # type: ignore[union-attr]
+        ]
+        found += [
+            (f"forward-{host}", forwards(host, app, 302)) for host in sorted({api, mcp} - {app})
+        ]
     if get.edge is None:  # the landing site is served by Cloudflare Pages, never by our edge
         found += [(f"landing-{host}", landing(str(host))) for host in names["landing"]]  # type: ignore[union-attr]
     if not deep:
