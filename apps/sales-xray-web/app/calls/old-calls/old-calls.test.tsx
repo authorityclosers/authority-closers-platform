@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import type { MissingCall } from "../../capture-setup/capture-setup-client";
+import { readLead, readLeads } from "../../leads/leads-client";
 import { runRecordingUpload } from "../../leads/simulated-call";
 import { readAutoAnalysis } from "../../settings/auto-analysis-client";
 import { track } from "../../telemetry";
@@ -152,6 +153,11 @@ vi.mock("../../leads/simulated-call", async (original) => ({
 vi.mock("../../leads/native-phone", async (original) => ({
   ...(await original<typeof import("../../leads/native-phone")>()),
   readPhoneRecording: vi.fn(async () => new File(["x"], "a.m4a")),
+}));
+vi.mock("../../leads/leads-client", async (original) => ({
+  ...(await original<typeof import("../../leads/leads-client")>()),
+  readLeads: vi.fn(),
+  readLead: vi.fn(),
 }));
 vi.mock("../../telemetry", async (original) => ({
   ...(await original<typeof import("../../telemetry")>()),
@@ -308,4 +314,69 @@ it("finds the phone number in a recording's name for Assign to a lead, leaving t
   expect(numberInName("Recording 7.m4a")).toBe("");
   // A short number stays whole.
   expect(numberInName("1800123456_20261125175246.amr")).toBe("1800123456");
+});
+
+it("offers a recording from before its lead was added, by the number in its name, and sends it only on the tap", async () => {
+  // The Redmi test (25 Nov 2026): the lead was added after the call, so the server has no call for it.
+  localStorage.setItem("sx:old-calls:agreed", "1");
+  const before = rec("Rohan Test(00919000000555)_20261125175246.mp3");
+  vi.mocked(scanOldCalls).mockResolvedValue({
+    scan: {
+      access: "ok",
+      scanned: 2,
+      missing: 0,
+      calls: [],
+      unplaced: [
+        {
+          startedMs: Date.parse("2026-11-25T12:22:46Z"),
+          seconds: 36,
+          recording: before,
+        },
+        { startedMs: 1, seconds: 30, recording: rec("e.m4a") },
+      ],
+    },
+    leads: {},
+  });
+  vi.mocked(readAutoAnalysis).mockResolvedValue({
+    schema: "sales-xray-auto-analysis/1",
+    state: "on",
+    can_start: true,
+  });
+  vi.mocked(readLeads).mockImplementation(
+    async (query) =>
+      (query.search === "9000000555"
+        ? {
+            leads: [
+              { lead_id: "l9", name: "rohan fictional", phone_last4: "0555" },
+            ],
+          }
+        : { leads: [] }) as never,
+  );
+  vi.mocked(readLead).mockResolvedValue({
+    lead: { lead_id: "l9", name: "rohan fictional" },
+    events: [],
+  } as never);
+  act(() =>
+    root.render(<OldCallsSheet open entry="calls" onClose={() => undefined} />),
+  );
+  await settle();
+  expect(host.ownerDocument.body.textContent).toContain(
+    "Before you added them",
+  );
+  expect(host.ownerDocument.body.textContent).toContain("Rohan Fictional");
+  expect(host.ownerDocument.body.textContent).toContain(
+    "1 recording we couldn't place",
+  );
+  // Never by itself, even under standing consent.
+  expect(runRecordingUpload).not.toHaveBeenCalled();
+  act(() => button(/^Analyse$/)!.click());
+  await settle();
+  expect(readLead).toHaveBeenCalledWith("l9", expect.anything());
+  expect(runRecordingUpload).toHaveBeenCalledTimes(1);
+  expect(vi.mocked(runRecordingUpload).mock.calls[0]![0].consent).toBe(
+    "standing",
+  );
+  expect(host.ownerDocument.body.textContent).not.toContain(
+    "Before you added them",
+  );
 });
