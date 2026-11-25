@@ -2,8 +2,9 @@
 
 A manager sets the days and hours the team works, in India time. Outside them:
 
-- the phone app logs no work calls (a call outside work hours stays on the
-  phone), and Sales Xray drops any that arrive anyway;
+- a call with a lead still counts and uploads (owner via the Mac orchestrator, 25 Nov 2026,
+  SX-AUTOUPLOAD: "Calls to/from a LEAD upload at ANY hour. Work hours only filter non-lead
+  calls"): the phone app only keeps non-lead calls out of "Save as lead?" (``offer_hours``);
 - when "pause new leads" is on, a lead that arrives waits without an owner and
   goes out to a seller when work starts, so a lead at night is never stranded
   with someone asleep. Each seller's own "Taking new leads" switch is left as

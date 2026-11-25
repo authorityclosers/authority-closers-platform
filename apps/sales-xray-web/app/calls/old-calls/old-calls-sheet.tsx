@@ -55,6 +55,7 @@ import {
   consentWord,
   fitWord,
   headline,
+  numberInName,
   progressLine,
   type OldCall,
   type OldCallsScan,
@@ -111,6 +112,11 @@ export function OldCallsSheet({
   const [running, setRunning] = useState<OldCall[]>([]);
   const [placed, setPlaced] = useState<ReadonlySet<string>>(new Set());
   const [assigning, setAssigning] = useState<Unplaced | null>(null);
+  // Unplaced recordings whose file name carries one of my leads' numbers: calls from before the lead was added
+  // (the server keeps those off the lead), offered with one tap (owner via the Mac orchestrator, 25 Nov 2026).
+  const [known, setKnown] = useState<ReadonlyMap<string, LeadRow>>(new Map());
+  const [sending, setSending] = useState<ReadonlySet<string>>(new Set());
+  const [sendProblem, setSendProblem] = useState<string | null>(null);
   const task = useRef<AbortController | null>(null);
   const started = useRef(0);
   // Where it opened from and who hears the result, as last rendered (the look
@@ -306,6 +312,45 @@ export function OldCallsSheet({
     (item) => !placed.has(item.recording.source),
   );
 
+  const scanned = scan?.unplaced;
+  useEffect(() => {
+    if (!scanned?.length) return;
+    const controller = new AbortController();
+    void leadsNamedIn(scanned, controller.signal).then((found) => {
+      if (!controller.signal.aborted) setKnown(found);
+    });
+    return () => controller.abort();
+  }, [scanned]);
+
+  const analyse = async (item: Unplaced, row: LeadRow) => {
+    if (!policy) return;
+    const source = item.recording.source;
+    setSendProblem(null);
+    setSending((current) => new Set([...current, source]));
+    try {
+      await placeRecording(
+        item,
+        row.lead_id,
+        policy,
+        how,
+        new AbortController().signal,
+      );
+      say("assign");
+      markHandled([source]);
+      setPlaced((current) => new Set([...current, source]));
+    } catch (reason) {
+      setSendProblem(
+        reason instanceof LeadsError
+          ? reason.message
+          : "This one didn't upload. Check your connection and try again.",
+      );
+    } finally {
+      setSending(
+        (current) => new Set([...current].filter((one) => one !== source)),
+      );
+    }
+  };
+
   const close = () => {
     task.current?.abort();
     onClose();
@@ -464,6 +509,10 @@ export function OldCallsSheet({
               <UnplacedList
                 items={unplaced}
                 canSend={canSend}
+                known={known}
+                sending={sending}
+                problem={sendProblem}
+                onAnalyse={(item, row) => void analyse(item, row)}
                 onAssign={setAssigning}
                 onSetAside={(item) => {
                   say("not_lead");
@@ -580,6 +629,10 @@ export function OldCallsSheet({
               <UnplacedList
                 items={unplaced}
                 canSend={canSend}
+                known={known}
+                sending={sending}
+                problem={sendProblem}
+                onAnalyse={(item, row) => void analyse(item, row)}
                 onAssign={setAssigning}
                 onSetAside={(item) => {
                   say("not_lead");
@@ -637,23 +690,81 @@ function CallLine({ call, state }: { call: OldCall; state?: RowState }) {
 function UnplacedList({
   items,
   canSend,
+  known,
+  sending,
+  problem,
+  onAnalyse,
   onAssign,
   onSetAside,
 }: {
   items: ReadonlyArray<Unplaced>;
   canSend: boolean;
+  known: ReadonlyMap<string, LeadRow>;
+  sending: ReadonlySet<string>;
+  problem: string | null;
+  onAnalyse: (item: Unplaced, row: LeadRow) => void;
   onAssign: (item: Unplaced) => void;
   onSetAside: (item: Unplaced) => void;
 }) {
+  const before = items.filter((item) => known.has(item.recording.source));
+  const rest = items.filter((item) => !known.has(item.recording.source));
   return (
     <div className={styles.unplaced}>
-      <h3>
-        {items.length === 1
-          ? "1 recording we couldn't place"
-          : `${items.length} recordings we couldn't place`}
-      </h3>
+      {before.length ? (
+        <>
+          <h3>Before you added them</h3>
+          <ol
+            className={styles.list}
+            aria-label="Lead calls from before the lead was added"
+          >
+            {before.map((item) => {
+              const row = known.get(item.recording.source)!;
+              return (
+                <li key={item.recording.source}>
+                  <span className={styles.callLine}>
+                    <strong>{displayName(row.name)}</strong>
+                    <small>
+                      {item.startedMs
+                        ? when(new Date(item.startedMs).toISOString())
+                        : "Date unknown"}
+                      {item.seconds ? ` · ${clockTime(item.seconds)}` : ""}
+                    </small>
+                    <small>Recorded before you added this lead</small>
+                  </span>
+                  <span className={styles.rowActions}>
+                    <Button
+                      variant="primary"
+                      disabled={!canSend || sending.has(item.recording.source)}
+                      onClick={() => onAnalyse(item, row)}
+                    >
+                      {sending.has(item.recording.source)
+                        ? "Uploading"
+                        : "Analyse"}
+                    </Button>
+                    <Button variant="ghost" onClick={() => onSetAside(item)}>
+                      Not a lead call
+                    </Button>
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+          {problem ? (
+            <p className={styles.error} role="alert">
+              {problem}
+            </p>
+          ) : null}
+        </>
+      ) : null}
+      {rest.length ? (
+        <h3>
+          {rest.length === 1
+            ? "1 recording we couldn't place"
+            : `${rest.length} recordings we couldn't place`}
+        </h3>
+      ) : null}
       <ol className={styles.list} aria-label="Recordings not placed">
-        {items.map((item) => (
+        {rest.map((item) => (
           <li key={item.recording.source}>
             <span className={styles.callLine}>
               <strong>
@@ -698,7 +809,8 @@ function AssignPanel({
   onCancel: () => void;
   onPlaced: (item: Unplaced) => void;
 }) {
-  const [query, setQuery] = useState("");
+  // A number in the file name (MIUI, Oppo): its lead comes up first, one tap away.
+  const [query, setQuery] = useState(() => numberInName(item.recording.name));
   const [found, setFound] = useState<LeadRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -722,17 +834,13 @@ function AssignPanel({
     setProblem(null);
     const controller = new AbortController();
     try {
-      const lead = await readLead(row.lead_id, controller.signal);
-      const file = await readPhoneRecording(item.recording);
-      await runRecordingUpload({
-        lead,
-        file,
+      await placeRecording(
+        item,
+        row.lead_id,
         policy,
-        attempt: `old-recording:${item.recording.size}:${item.startedMs}`,
         consent,
-        onStep: () => undefined,
-        signal: controller.signal,
-      });
+        controller.signal,
+      );
       onPlaced(item);
     } catch (reason) {
       setProblem(
@@ -785,4 +893,64 @@ function AssignPanel({
       </div>
     </section>
   );
+}
+
+/** Uploads a recording the phone couldn't place onto this lead (Assign to a lead, and Before you added them). */
+async function placeRecording(
+  item: Unplaced,
+  leadId: string,
+  policy: UploadPolicy,
+  consent: "standing" | "accepted",
+  signal: AbortSignal,
+): Promise<void> {
+  const lead = await readLead(leadId, signal);
+  const file = await readPhoneRecording(item.recording);
+  await runRecordingUpload({
+    lead,
+    file,
+    policy,
+    attempt: `old-recording:${item.recording.size}:${item.startedMs}`,
+    consent,
+    onStep: () => undefined,
+    signal,
+  });
+}
+
+/**
+ * The unplaced recordings whose file name carries the number of exactly one of my leads, by recording source.
+ * One lead search per number (the server matches the digits in the lead's phone), at most a few at once.
+ */
+async function leadsNamedIn(
+  items: ReadonlyArray<Unplaced>,
+  signal: AbortSignal,
+): Promise<ReadonlyMap<string, LeadRow>> {
+  const byNumber = new Map<string, string[]>();
+  for (const item of items) {
+    const number = numberInName(item.recording.name);
+    if (number.length < 7) continue;
+    byNumber.set(number, [
+      ...(byNumber.get(number) ?? []),
+      item.recording.source,
+    ]);
+  }
+  const found = new Map<string, LeadRow>();
+  const numbers = [...byNumber.keys()].slice(0, 20);
+  for (let i = 0; i < numbers.length; i += 4) {
+    const turn = numbers.slice(i, i + 4);
+    const pages = await Promise.all(
+      turn.map((number) =>
+        readLeads({ scope: "mine", search: number }, signal).then(
+          (page) => page.leads,
+          () => [] as LeadRow[],
+        ),
+      ),
+    );
+    turn.forEach((number, index) => {
+      const leads = pages[index] ?? [];
+      if (leads.length !== 1) return;
+      for (const source of byNumber.get(number) ?? [])
+        found.set(source, leads[0]);
+    });
+  }
+  return found;
 }

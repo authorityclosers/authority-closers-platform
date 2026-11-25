@@ -2399,8 +2399,14 @@ class PhoneBook(Model):
     organisation_workspace: bool = False
     numbers: tuple[str, ...]
     generated_at: datetime
-    # A call outside these stays on the phone (Salestrail's business hours).
+    # The phone filters its call history by these. Always None since 25 Nov 2026 (owner via
+    # the Mac orchestrator, SX-AUTOUPLOAD: "calls to/from a LEAD upload at ANY hour; work
+    # hours only filter non-lead calls"), so every installed app sends its lead calls at any
+    # hour; ``offer_hours`` keeps the team's hours for newer apps.
     work_hours: WorkHoursView | None = None
+    # The team's work hours for what stays on the phone: a non-lead call outside them is not
+    # offered as "Save as lead?" (newer apps; older ones read only ``work_hours``).
+    offer_hours: WorkHoursView | None = None
 
 
 class PhoneLogged(Model):
