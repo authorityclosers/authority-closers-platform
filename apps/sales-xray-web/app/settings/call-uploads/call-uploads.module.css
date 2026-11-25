@@ -51,7 +51,9 @@
   justify-content: center;
   border-radius: var(--sx-radius-pill);
   background: var(--sx-accent);
-  color: var(--sx-primary-ink);
+  /* Words ON the accent fill take the accent's own ink (white on Settings' green in both themes), never
+     --sx-primary-ink (green words for a surface: 1.05:1 on this fill, v1.99 twin judge's blank button). */
+  color: var(--sx-accent-ink);
   font-weight: 500;
   text-decoration: none;
   padding-inline: 20px;

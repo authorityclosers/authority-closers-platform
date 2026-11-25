@@ -4,7 +4,8 @@
  * Review fixture: Settings → This phone → Call uploads (SX-AUTOUPLOAD, 25 Nov 2026) as the phone app shows it, in a
  * browser. A stand-in phone bridge answers with one of these states (?view=): ok (default: uploading, one failed,
  * one waiting), terms (stopped by new upload terms), private (Google's Phone app), off (uploads off), recording
- * (the dialer isn't recording). Fictional names only.
+ * (the dialer isn't recording), web (a computer's browser: no phone bridge, "Get the Android app"), iphone (the
+ * iPhone app: "Upload a call"). Fictional names only.
  */
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -12,7 +13,7 @@ import { useSearchParams } from "next/navigation";
 import { applyTheme } from "../../lightbox/theme";
 import { CallUploads } from "../../settings/call-uploads/call-uploads";
 
-type View = "ok" | "terms" | "private" | "off" | "recording";
+type View = "ok" | "terms" | "private" | "off" | "recording" | "web" | "iphone";
 
 function answers(view: View): Record<string, () => unknown> {
   const now = Date.now();
@@ -154,10 +155,17 @@ export function CallUploadsPreview() {
       asked === "terms" ||
       asked === "private" ||
       asked === "off" ||
-      asked === "recording"
+      asked === "recording" ||
+      asked === "web" ||
+      asked === "iphone"
         ? asked
         : "ok";
-    installPhone(view);
+    // web: no phone bridge at all. iphone: no bridge, and the iPhone app's Capacitor answers "ios".
+    if (view === "iphone")
+      (globalThis as { Capacitor?: unknown }).Capacitor = {
+        getPlatform: () => "ios",
+      };
+    else if (view !== "web") installPhone(view);
     // The screen mounts once the stand-in phone is in place (next task, not in the effect).
     const timer = window.setTimeout(() => setReady(true), 0);
     return () => window.clearTimeout(timer);
@@ -169,7 +177,7 @@ export function CallUploadsPreview() {
         maxWidth: 420,
         margin: "0 auto",
         padding: 16,
-        background: "var(--sx-page, #f0f2f6)",
+        background: "var(--sx-paper)",
         minHeight: "100vh",
       }}
     >
