@@ -1154,7 +1154,7 @@ export function AccountAuth({
           ) : !selectedFile ? (
             <>
               <Link className={`${styles.returnLink} sx-web-only`} href="/">
-                <ArrowLeft size={16} aria-hidden="true" /> Return to app
+                <ArrowLeft size={16} aria-hidden="true" /> Back to Home
               </Link>
               {/* The phone app has no browser back and no tab bar here: without
                   this, Sign in was a dead end and "Analyse a call without an

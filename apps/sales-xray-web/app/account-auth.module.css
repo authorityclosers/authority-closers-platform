@@ -398,7 +398,7 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 12px 0 10px;
   border: 1px solid var(--lx-line);
   border-radius: var(--lx-radius-pill);
@@ -766,7 +766,7 @@
   margin-top: 14px;
 }
 .password {
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 12px;
   border: 0;
   border-radius: var(--lx-radius-pill);
@@ -890,7 +890,7 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
-  min-height: 38px;
+  min-height: 44px;
   padding: 0 14px;
   border: 0;
   border-radius: var(--lx-radius-sm);
@@ -908,7 +908,7 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
-  min-height: 40px;
+  min-height: 44px;
   border: 0;
   background: none;
   color: var(--lx-ink-3);

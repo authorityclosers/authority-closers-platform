@@ -108,6 +108,7 @@
   box-shadow: var(--lx-shadow-1);
 }
 
+.panel h1,
 .panel h2 {
   margin: 0;
   color: var(--lx-ink);
@@ -300,7 +301,7 @@
   justify-content: center;
   gap: 8px;
   width: 100%;
-  min-height: 42px;
+  min-height: 44px;
   padding: 10px 16px;
   border: 1px solid var(--lx-line-strong);
   border-radius: var(--lx-radius-sm, 10px);
@@ -477,8 +478,8 @@
 
 .stepper button {
   display: grid;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   place-items: center;
   border: 0;
   background: transparent;
@@ -1081,6 +1082,7 @@
     border-radius: 16px;
   }
 
+  .panel h1,
   .panel h2 {
     font-size: var(--sx-text-md);
   }
@@ -1621,7 +1623,7 @@
   flex-shrink: 0;
 }
 
-.ladderHeading h2 {
+.ladderHeading h1 {
   margin: 0;
   color: var(--lx-ink, #0f172a);
   font: 800 var(--sx-text-md) / var(--sx-leading-24)

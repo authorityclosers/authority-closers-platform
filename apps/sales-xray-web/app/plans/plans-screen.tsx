@@ -224,7 +224,7 @@ export function PlansScreen({
             <div className={styles.successIconWrap}>
               <Check size={28} className={styles.iconGood} aria-hidden="true" />
             </div>
-            <h2>Payment successful</h2>
+            <h1>Payment successful</h1>
             <p className={styles.successSummary}>
               <b>{paid.planName}</b> ·{" "}
               {money(paid.amount.minor, paid.amount.currency)} paid
@@ -256,7 +256,7 @@ export function PlansScreen({
             {/* Header row with Title and Cycle Switcher */}
             <div className={styles.ladderTopRow}>
               <div className={styles.ladderHeading}>
-                <h2>Choose your subscription</h2>
+                <h1>Choose your subscription</h1>
                 <p className={styles.hint}>
                   Select the plan that fits your sales rhythm. Upgrade,
                   downgrade, or cancel anytime.
