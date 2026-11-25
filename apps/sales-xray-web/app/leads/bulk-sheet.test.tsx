@@ -261,3 +261,29 @@ it("says how to start when no template is approved", async () => {
   const dialog = await open();
   expect(dialog.textContent).toContain("No approved WhatsApp templates yet.");
 });
+
+it("lists nobody, never crashes, when the team reply has no people (radar 25 Nov 2026)", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      Response.json({ schema: "lead-desk/1", leads: [], total: 0 }),
+    ),
+  );
+  await act(async () =>
+    root.render(
+      <BulkSheet
+        open
+        leadIds={["a", "b"]}
+        pipeline={null}
+        onClose={() => undefined}
+        onDone={() => undefined}
+      />,
+    ),
+  );
+  await flush();
+  await act(async () => press("Give to a person").click());
+  await flush();
+  const dialog = document.querySelector("dialog")!;
+  expect(dialog.textContent).toContain("Let the lead rules pick");
+  expect(dialog.textContent).not.toContain("Loading your team");
+});
