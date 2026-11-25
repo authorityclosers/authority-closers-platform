@@ -212,10 +212,14 @@
   font-weight: 500;
   transition: transform var(--sx-dur-fast) var(--sx-ease-out);
 }
+/* The family's deep-green pill with white words in both themes, like every
+   main button since v1.98 (the accent was a light mint with dark words in
+   dark). Shared by the missed-alert and "call not checked" cards. */
 .primary {
   border: 0;
-  background: var(--sx-accent);
-  color: var(--sx-accent-ink);
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
 }
 .secondary {
   border: 1px solid var(--sx-line);
