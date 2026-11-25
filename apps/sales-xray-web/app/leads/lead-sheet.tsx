@@ -182,6 +182,7 @@ import {
 } from "./auto-start";
 import { readAutoAnalysis } from "../settings/auto-analysis-client";
 import { AutoAnalysisSheet } from "../settings/auto-analysis-sheet";
+import { resumeAfterAgreeing } from "../settings/resume-after-agreeing";
 import {
   MessageSetup,
   MessageSheet,
@@ -3682,7 +3683,11 @@ function RecordingUpload({
         open={asking}
         onSaved={(view) => {
           turnedOn.current = true;
+          // This call goes first (uploads are still off here, so it takes the one-tap path)...
           if (view.can_start && idleNow.current) void startOnItsOwn();
+          // ...then a phone the 16 Nov terms change stopped turns back on (Android's Turn on words first),
+          // so the next lead calls upload by themselves (SX-AUTOUPLOAD, 25 Nov 2026).
+          if (view.state === "on") void resumeAfterAgreeing();
         }}
         onClose={() => {
           setAsking(false);
