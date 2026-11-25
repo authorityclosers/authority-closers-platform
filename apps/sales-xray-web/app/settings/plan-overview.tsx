@@ -121,7 +121,7 @@ export function PlanOverview({
   const current = subs?.current ?? null;
   const loading = status === "loading";
   const unread = !loading && status !== "ready";
-  // On the free month the chip says so, not "No plan yet" (owner, 22 Nov 2026).
+  // On the free trial the chip says so, not "No plan yet" (owner, 22 Nov 2026).
   const onTrial = !current && !unread && Boolean(mePlan?.trial);
   const word = onTrial
     ? { label: "Free", tone: "good" }
@@ -132,8 +132,8 @@ export function PlanOverview({
   const left = time ? mins(time.available_seconds) : 0;
   const share = total > 0 ? left / total : 0;
   const unlimited = time?.unlimited === true;
-  // The free trial in plain words (owner, 22 Nov 2026: "1 month + 3 hours"):
-  // "Free for 1 month · 3 hours of call analysis", "27 days · 2 h 10 min left".
+  // The free trial in plain words (owner, 25 Nov 2026: "15 days or 3 hours"):
+  // "Free for 15 days or 3 hours of call analysis", "12 days · 2 h 10 min left".
   const trial = !current && !unlimited ? (mePlan?.trial ?? null) : null;
   const low = Boolean(time) && !unlimited && total > 0 && share < LOW_SHARE;
   const topUp = purchasesAllowed && onBuyTopUp ? packs[0] : undefined;

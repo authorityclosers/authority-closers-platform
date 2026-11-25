@@ -207,6 +207,7 @@ def test_missing_or_disabled_factory_fails_closed_without_starting_work(state):
         operations_tenant_id=state.operations,
         sales_xray_trial_policy="v2",
         sales_xray_trial_policy_switch_at=NOW,
+        sales_xray_trial_15_days_from=None,
     )
     worker = create_minute_expiry_worker(
         settings=settings,

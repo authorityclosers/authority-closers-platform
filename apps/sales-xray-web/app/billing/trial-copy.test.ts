@@ -1,6 +1,11 @@
 import { expect, it } from "vitest";
 
-import { trialHeadline, trialHours, trialLeft } from "./trial-copy";
+import {
+  TRIAL_TERMS,
+  trialHeadline,
+  trialHours,
+  trialLeft,
+} from "./trial-copy";
 
 // Owner, 22 Nov 2026: "1 month + 3 hours", whichever comes first.
 const NOW = Date.parse("2026-11-28T06:30:00Z");
@@ -8,7 +13,10 @@ const month = { seconds: 10_800, endsAt: "2026-12-25T07:00:00Z" };
 
 it("names the free month and its three hours", () => {
   expect(trialHeadline(month)).toBe(
-    "Free for 1 month · 3 hours of call analysis",
+    "Free for 1 month or 3 hours of call analysis",
+  );
+  expect(trialHeadline({ ...month, days: 30 })).toBe(
+    "Free for 1 month or 3 hours of call analysis",
   );
   // Trial v1 has no end: no month is promised.
   expect(trialHeadline({ seconds: 10_800, endsAt: null })).toBe(
@@ -32,7 +40,7 @@ it("says the days and time left", () => {
 
 it("says which end came first", () => {
   expect(trialLeft(month, 7800, Date.parse(month.endsAt))).toBe(
-    "Your free month has ended",
+    "Your free trial has ended",
   );
   expect(trialLeft(month, 0, NOW)).toBe("You've used your 3 free hours");
   expect(trialLeft({ seconds: 10_800, endsAt: null }, 0, NOW)).toBe(
@@ -48,4 +56,17 @@ it("never says 15 days", () => {
     trialLeft(month, 1, Date.parse(month.endsAt)),
   ].join(" ");
   expect(all).not.toMatch(/15\s*days?/i);
+});
+
+// Owner, 25 Nov 2026: "fifteen days or three hours, no card, whichever ends".
+it("names 15 days or 3 hours for a new trial", () => {
+  const fifteen = { seconds: 10_800, endsAt: "2026-12-10T07:00:00Z", days: 15 };
+  expect(trialHeadline(fifteen)).toBe(
+    "Free for 15 days or 3 hours of call analysis",
+  );
+  expect(trialLeft(fifteen, 7800, NOW)).toBe("12 days · 2 h 10 min left");
+  expect(trialLeft(fifteen, 7800, Date.parse(fifteen.endsAt))).toBe(
+    "Your free trial has ended",
+  );
+  expect(TRIAL_TERMS).toBe("15 days or 3 hours of call analysis");
 });

@@ -14,8 +14,9 @@ export function formatAnalysisTime(seconds: number): string {
 /**
  * How much analysis is left, in time, never a price (orchestrator, 13 Nov 2026:
  * the owner found "no good UI which makes it understandable"): "2 h 41 min of
- * analysis left", or before a personal account's first analysis "1 month free
- * · 3 hours to try" (owner, 22 Nov 2026: "1 month + 3 hours"). Null while nothing is left (the out-of-minutes reason says that), when
+ * analysis left", or before a personal account's first analysis "15 days free
+ * · 3 hours to try" (owner, 25 Nov 2026: "fifteen days or three hours"; the trial
+ * starts at the first analysis). Null while nothing is left (the out-of-minutes reason says that), when
  * it is unlimited, or before the number is known.
  */
 export function analysisTimeLeft(
@@ -36,8 +37,8 @@ export function analysisTimeLeft(
   if (scope === "personal" && untouched) {
     const hours = seconds / 3600;
     return Number.isInteger(hours)
-      ? `1 month free · ${hours} ${hours === 1 ? "hour" : "hours"} to try`
-      : `1 month free · ${formatAnalysisTime(seconds)} to try`;
+      ? `15 days free · ${hours} ${hours === 1 ? "hour" : "hours"} to try`
+      : `15 days free · ${formatAnalysisTime(seconds)} to try`;
   }
   return `${formatAnalysisTime(seconds)} of analysis left`;
 }

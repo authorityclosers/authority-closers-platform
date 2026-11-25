@@ -704,3 +704,28 @@ def test_trial_switch_instant_blank_is_none_and_v2_in_production_needs_one() -> 
     )
     assert switched.sales_xray_trial_policy_switch_at is not None
     assert switched.sales_xray_trial_policy_switch_at.isoformat() == "2026-11-25T06:30:00+00:00"
+
+
+def test_trial_15_days_instant_is_optional_and_needs_v2_and_an_offset() -> None:
+    """Owner, 25 Nov 2026: "fifteen days or three hours, no card, whichever ends". New
+    trials are 15 days from this instant on; it means nothing without v2."""
+    blank = Settings(_env_file=None, sales_xray_trial_15_days_from="")  # type: ignore[arg-type]
+    assert blank.sales_xray_trial_15_days_from is None
+    with pytest.raises(ValidationError, match="TRIAL_15_DAYS_FROM requires trial policy v2"):
+        Settings(_env_file=None, sales_xray_trial_15_days_from="2026-11-26T06:30:00+00:00")  # type: ignore[arg-type]
+    with pytest.raises(ValidationError, match="TRIAL_15_DAYS_FROM must carry a UTC offset"):
+        Settings(
+            _env_file=None,
+            sales_xray_trial_policy="v2",
+            sales_xray_trial_15_days_from="2026-11-26T06:30:00",  # type: ignore[arg-type]
+        )
+    fifteen = Settings(
+        _env_file=None,
+        environment="production",
+        sales_xray_trial_policy="v2",
+        sales_xray_trial_policy_switch_at="2026-11-23T06:00:00+00:00",  # type: ignore[arg-type]
+        sales_xray_trial_15_days_from="2026-11-26T06:30:00+00:00",  # type: ignore[arg-type]
+        **_production_values(),  # type: ignore[arg-type]
+    )
+    assert fifteen.sales_xray_trial_15_days_from is not None
+    assert fifteen.sales_xray_trial_15_days_from.isoformat() == "2026-11-26T06:30:00+00:00"

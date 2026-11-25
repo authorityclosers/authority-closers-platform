@@ -1323,7 +1323,9 @@ def create_minute_expiry_worker(
         public_learner_tenant_id=settings.public_learner_tenant_id,
         operations_tenant_id=settings.operations_tenant_id,
         trial_policy=TrialPolicy(
-            settings.sales_xray_trial_policy, settings.sales_xray_trial_policy_switch_at
+            settings.sales_xray_trial_policy,
+            settings.sales_xray_trial_policy_switch_at,
+            settings.sales_xray_trial_15_days_from,
         ),
         clock=clock,
         signal=signal,

@@ -138,7 +138,9 @@ def install_acquisition_runtime(
 ) -> None:
     learner_host = settings.public_app_url.host
     trial_policy = TrialPolicy(
-        settings.sales_xray_trial_policy, settings.sales_xray_trial_policy_switch_at
+        settings.sales_xray_trial_policy,
+        settings.sales_xray_trial_policy_switch_at,
+        settings.sales_xray_trial_15_days_from,
     )
     public = settings.public_learner_tenant_id
 

@@ -226,7 +226,7 @@ const message = (error: unknown) =>
 export const ADD_MINUTES_HREF = "/settings/plan#add-minutes";
 
 /** Whether a refusal is the trial's own limit: too few minutes for this call, its
- *  free month ended, or its free hours used (owner, 22 Nov 2026). */
+ *  free trial's days ended, or its free hours used (owner, 22 and 25 Nov 2026). */
 const trialLimit = (reason: AcquisitionError["reason"]) =>
   (TRIAL_LIMIT_REASONS as readonly (string | undefined)[]).includes(reason);
 
@@ -3567,7 +3567,7 @@ export function AcquisitionStudio({
                         <span aria-hidden="true">
                           <Check size={13} />
                         </span>
-                        Free analysis · part of your 1 month free
+                        Free analysis · part of your free trial
                       </p>
                       <details
                         className={styles.privacyDetails}
@@ -4367,7 +4367,7 @@ function errorTitle(error: unknown, statusOnly: boolean) {
     if (error.reason === "call_too_long") return "This call is too long";
     if (error.reason === "trial_allowance_insufficient")
       return "Not enough analysis minutes";
-    if (error.reason === "trial_ended") return "Your free month has ended";
+    if (error.reason === "trial_ended") return "Your free trial has ended";
     if (error.reason === "trial_used") return "Your 3 free hours are used";
     if (error.status === 403) return "Access needs a check";
     if (error.status === 404) return "Call not found";

@@ -211,11 +211,12 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* The picked choice is the family's deep green with white words in both
+   themes (v1.98: in dark the emerald was a light mint with dark words). */
 .pill[aria-checked="true"] {
-  background: var(--lx-home-emerald);
-  color: var(--sx-surface);
-  box-shadow: 0 4px 10px -6px
-    color-mix(in oklab, var(--lx-home-emerald) 70%, transparent);
+  background: var(--sx-gloss);
+  color: var(--sx-gloss-ink);
+  box-shadow: var(--sx-gloss-depth);
 }
 
 .pill:focus-visible {
@@ -390,8 +391,10 @@
   min-height: 44px;
   padding: 0 22px;
   border-radius: var(--sx-radius-pill);
-  background: var(--lx-home-emerald);
-  color: var(--sx-surface);
+  /* v1.98: deep green with white words in both themes, not a light mint in dark. */
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
   font-size: var(--sx-text-sm);
   font-weight: 700;
   text-decoration: none;

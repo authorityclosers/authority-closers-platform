@@ -15,10 +15,10 @@ it("says how much analysis is left, or the free month a new account has to try",
     available_seconds: available,
   });
   expect(analysisTimeLeft(left(10_800, 10_800, 0), "personal")).toBe(
-    "1 month free · 3 hours to try",
+    "15 days free · 3 hours to try",
   );
   expect(analysisTimeLeft(left(3_600, 3_600, 0), "personal")).toBe(
-    "1 month free · 1 hour to try",
+    "15 days free · 1 hour to try",
   );
   expect(analysisTimeLeft(left(9_660), "personal")).toBe(
     "2 h 41 min of analysis left",

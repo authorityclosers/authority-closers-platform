@@ -65,6 +65,12 @@ event may create paid seconds, and use already lives in append-only tables.
    window that had ended before the decision stays ended. At the switch, a
    person who started under v1 keeps the lot from their first use, so their
    earlier minutes count, and gets the 30 days from the switch instant.)
+   (Owner, 25 Nov 2026: "fifteen days or three hours, no card, whichever
+   ends", `trial.TRIAL_DAYS` = 15: from an environment's
+   `AC_SALES_XRAY_TRIAL_15_DAYS_FROM` instant a new window is 15 days; a window
+   that started before it keeps its month (`trial.MONTH_TRIAL_DAYS`), so no
+   running trial gets shorter. /v1/me/plan names the length ("15 days free",
+   "1 month free"); its `trial` object keeps its two keys.)
 9. Provider contract: `create_checkout`, `create_subscription`,
    `cancel_subscription`, `verify_event`, `fetch_payment`, `refund`; events
    `payment.captured`, `subscription.activated|charged|state`,

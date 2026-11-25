@@ -320,10 +320,12 @@
   background: var(--lx-sunken);
 }
 
+/* The family's deep-green pill with white words in both themes (v1.98). */
 .planActionBtn[data-primary="true"] {
   border-color: transparent;
-  background: var(--lx-teal);
-  color: var(--lx-on-teal);
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
 }
 
 .planActionBtn[data-primary="true"]:hover:not(:disabled) {

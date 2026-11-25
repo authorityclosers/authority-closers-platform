@@ -265,9 +265,12 @@ li[data-unread="true"] .words strong {
   white-space: nowrap;
 }
 
+/* v1.98: the family's deep green with white words in both themes (in dark the
+   emerald was a light mint with dark words). */
 .go[data-first] {
-  background: var(--lx-home-emerald);
-  color: var(--sx-surface);
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
 }
 
 /* The switch: v1.90 Home pills, solid deep green when chosen. */
@@ -294,8 +297,9 @@ li[data-unread="true"] .words strong {
 }
 
 .pill[aria-pressed="true"] {
-  background: var(--lx-home-emerald);
-  color: var(--sx-surface);
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
 }
 
 .pill:focus-visible {

@@ -94,8 +94,11 @@
   padding: 0 18px;
   border: 0;
   border-radius: 999px;
-  background: var(--sx-accent);
-  color: var(--sx-accent-ink);
+  /* The family's deep-green pill with white words in both themes, not the
+     accent (a light mint with dark words in dark); v1.98. */
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
   font: inherit;
   font-weight: 650;
   text-decoration: none;

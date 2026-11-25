@@ -17,14 +17,16 @@ it("is a whole page with a title, its language and a retry", () => {
   expect(html).toContain("Try again");
 });
 
-it("draws its one filled action in the kit's teal, which stays teal in dark mode", () => {
-  // The QA robot, 8 Nov 2026: Go to Home was ink on surface, a white pill in dark.
+it("draws its one filled action in the family deep green, white words in both themes", () => {
+  // The QA robot, 8 Nov 2026: Go to Home was ink on surface, a white pill in
+  // dark. v1.98: the teal turned a light mint with dark words in dark, so it
+  // takes the family's deep-green pill, as every other main button.
   const css = readFileSync(
     join(process.cwd(), "app/error-page.module.css"),
     "utf8",
   );
   const primary = css.match(/\n\.primary \{([^}]*)\}/)?.[1] ?? "";
-  expect(primary).toContain("background: var(--lx-teal);");
-  expect(primary).toContain("color: var(--lx-on-teal);");
+  expect(primary).toContain("background: var(--sx-gloss);");
+  expect(primary).toContain("color: var(--sx-gloss-ink);");
   expect(primary).not.toContain("--lx-ink");
 });

@@ -29,7 +29,7 @@ def projected(
 
 
 def test_the_messages_say_month_and_hours_and_never_15_days() -> None:
-    assert TRIAL_ENDED_MESSAGE == "Your free month has ended. Contact AC for more access."
+    assert TRIAL_ENDED_MESSAGE == "Your free trial has ended. Contact AC for more access."
     assert TRIAL_USED_MESSAGE == "You've used your 3 free hours. Contact AC for more access."
     for message in (TRIAL_ENDED_MESSAGE, TRIAL_USED_MESSAGE, TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE):
         assert "15 day" not in message

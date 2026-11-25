@@ -62,6 +62,7 @@ import {
   signInOnPhone,
   type NativeSignInProvider,
 } from "./leads/native-phone";
+import { TRIAL_TERMS } from "./billing/trial-copy";
 
 export type AccountAuthPreviewState =
   | "auth.email"
@@ -1085,7 +1086,8 @@ export function AccountAuth({
     ) : unavailable && !googleAvailable ? (
       "Sign in with your existing Authority Closers account."
     ) : (
-      "New here? The same steps create your account."
+      // Owner, 25 Nov 2026: "fifteen days or three hours, no card, whichever ends".
+      `New here? The same steps create your account. Start free: ${TRIAL_TERMS}. No card needed.`
     );
   return (
     <section
