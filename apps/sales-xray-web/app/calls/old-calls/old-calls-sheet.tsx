@@ -39,8 +39,15 @@ import {
 } from "../../settings/auto-analysis-client";
 import { track, type TelemetryEvents } from "../../telemetry";
 import { Button } from "../../ui/kit";
-import { markHandled, markLooked, scanOldCalls } from "./old-calls-client";
 import {
+  markAgreed,
+  markHandled,
+  markLooked,
+  readAgreed,
+  scanOldCalls,
+} from "./old-calls-client";
+import {
+  LOOK_BACK_DAYS,
   ROW_WORDS,
   autoCalls,
   buckets,
@@ -265,9 +272,12 @@ export function OldCallsSheet({
         setPhase("empty");
         return;
       }
-      // Standing consent on: the sure and likely matches start by themselves.
+      // Standing consent on: the sure and likely matches start by themselves, once the seller chose the first
+      // time on this phone (owner, 25 Nov 2026: "show the count and ask once before uploading; then continuous").
       const first =
-        consentPath(standing) === "auto" ? autoCalls(outcome.scan.calls) : [];
+        consentPath(standing) === "auto" && readAgreed()
+          ? autoCalls(outcome.scan.calls)
+          : [];
       if (first.length && terms) {
         track("sx.old_calls", {
           stage: "auto_started",
@@ -335,7 +345,7 @@ export function OldCallsSheet({
             <h2>Looking for your old calls</h2>
             <ol className={styles.scanSteps}>
               <li>Your call history: lead calls with no recording</li>
-              <li>Your recordings folder: the last 14 days</li>
+              <li>Your recordings folder: the last {LOOK_BACK_DAYS} days</li>
               <li>Matching each call to its recording…</li>
             </ol>
             <p className={styles.note}>Nothing is uploaded yet.</p>
@@ -372,7 +382,7 @@ export function OldCallsSheet({
             <p className={styles.note}>
               {scan?.missing
                 ? `${scan.missing} lead calls had no recording, and your phone has none for them.`
-                : "Every lead call of the last 14 days already has its recording."}
+                : `Every lead call of the last ${LOOK_BACK_DAYS} days already has its recording.`}
             </p>
             <div className={styles.actions}>
               <Button variant="primary" onClick={close}>
@@ -386,7 +396,7 @@ export function OldCallsSheet({
           <section className={styles.hero}>
             {calls.length ? (
               <>
-                <p className={styles.eyebrow}>Last 14 days</p>
+                <p className={styles.eyebrow}>Last {LOOK_BACK_DAYS} days</p>
                 <h2>
                   <span className={styles.count}>{calls.length}</span>{" "}
                   {headline(calls.length).replace(/^\d+ /, "")}
@@ -418,6 +428,7 @@ export function OldCallsSheet({
                     disabled={!canSend}
                     onClick={() => {
                       say("chose_all", { found: calls.length });
+                      markAgreed();
                       void run([...calls], how, auto, leads, policy);
                     }}
                   >
@@ -496,7 +507,10 @@ export function OldCallsSheet({
               <Button
                 variant="primary"
                 disabled={!canSend || !pickedCalls.length}
-                onClick={() => void run(pickedCalls, how, auto, leads, policy)}
+                onClick={() => {
+                  markAgreed();
+                  void run(pickedCalls, how, auto, leads, policy);
+                }}
               >
                 {pickedCalls.length === 1
                   ? "Analyse 1 call"

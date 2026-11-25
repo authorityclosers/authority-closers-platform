@@ -37,6 +37,17 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+/* v1.99 (bug radar, 320 px with large text): on a phone a long link label
+   wraps inside its button instead of pushing the report past the screen. */
+@media (max-width: 479.98px) {
+  .links > a {
+    max-width: 100%;
+    height: auto;
+    min-height: 44px;
+    white-space: normal;
+    text-align: center;
+  }
+}
 @media (max-width: 600px) {
   .coaching > button {
     min-height: 44px;

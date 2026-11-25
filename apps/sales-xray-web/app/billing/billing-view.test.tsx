@@ -85,6 +85,10 @@ it("says the free month, its three hours and what is left", async () => {
     const text = host.textContent ?? "";
     expect(text).toContain("Free for 1 month or 3 hours of call analysis");
     expect(text).toContain("27 days · 2 h 10 min left");
+    // Given, used and left together (owner ask, 18 Nov 2026).
+    expect(text).toContain(
+      "of 180 min in total (plan, free trial and top-ups) · 50 min used",
+    );
     expect(text).toContain("1 month free");
     expect(text).not.toContain("You're on the free trial.");
     expect(text).not.toMatch(/15\s*days?/i);

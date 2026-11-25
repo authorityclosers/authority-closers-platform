@@ -100,7 +100,19 @@
   background: var(--lx-paper-2, #f4f6fa);
 }
 
+.placeholder {
+  min-height: 300px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--lx-radius-md, 14px);
+  background: var(--sx-surface);
+  opacity: 0.6;
+}
+
 @media (max-width: 520px) {
+  .placeholder {
+    min-height: 320px;
+  }
+
   .plan {
     padding: 15px;
   }

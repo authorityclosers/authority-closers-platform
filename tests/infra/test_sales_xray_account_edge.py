@@ -281,8 +281,9 @@ def test_denial_does_not_wait_for_any_upload_body(edge: Edge):
 
 
 # The customer domain (owner, 2 Nov 2026), production only: app.salesxray.in is the same
-# Sales Xray as the old address, api.salesxray.in carries only the API, and salesxray.in
-# and www go to the app until the landing site exists.
+# Sales Xray as the old address, api.salesxray.in carries only the API, salesxray.in (a
+# fallback: the landing site is on Cloudflare Pages) goes to the app, and www goes to the
+# landing site (WEB-DEBUG audit, 25 Nov 2026).
 def _production_only(edge: Edge) -> None:
     if edge.environment != "production":
         pytest.skip("salesxray.in serves production only")
@@ -318,9 +319,7 @@ def test_the_customer_domain_app_serves_its_pages(edge: Edge):
     assert edge.seen[0][:2] == ("GET", "/leads")
 
 
-@pytest.mark.parametrize(
-    "host", ("salesxray.in", "www.salesxray.in", "api.salesxray.in", "mcp.salesxray.in")
-)
+@pytest.mark.parametrize("host", ("salesxray.in", "api.salesxray.in", "mcp.salesxray.in"))
 def test_the_customer_domain_pages_go_to_the_app(edge: Edge, host: str):
     _production_only(edge)
     assert _page(edge, "GET", host, "/leads?tab=sources") == (
@@ -328,6 +327,17 @@ def test_the_customer_domain_pages_go_to_the_app(edge: Edge, host: str):
         "https://app.salesxray.in/leads?tab=sources",
     )
     assert _page(edge, "POST", host, "/leads") == (404, None)
+    assert edge.seen == []
+
+
+def test_www_pages_go_to_the_landing_site(edge: Edge):
+    _production_only(edge)
+    assert _page(edge, "GET", "www.salesxray.in", "/pricing?from=ad") == (
+        301,
+        "https://salesxray.in/pricing?from=ad",
+    )
+    assert _page(edge, "HEAD", "www.salesxray.in", "/") == (301, "https://salesxray.in/")
+    assert _page(edge, "POST", "www.salesxray.in", "/leads") == (404, None)
     assert edge.seen == []
 
 

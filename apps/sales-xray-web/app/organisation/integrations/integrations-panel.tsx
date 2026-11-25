@@ -1152,7 +1152,7 @@ function AppsSection({
       title="Apps with access"
       info={
         <p>
-          Apps you approved to reach your organisation, such as Pulse or
+          Apps you approved to reach your organisation, such as Vitals OS or
           ChatGPT. Building your own? Register it, and organisations can connect
           it the same way.
         </p>

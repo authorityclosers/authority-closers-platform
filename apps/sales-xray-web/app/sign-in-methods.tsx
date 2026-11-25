@@ -88,7 +88,7 @@ const LABELS: Record<MethodKind, string> = {
   google: "Google",
   apple: "Apple",
   facebook: "Facebook",
-  pulse: "Pulse",
+  pulse: "Vitals OS",
 };
 const KINDS = new Set<string>(Object.keys(LABELS));
 // Only a provider can be connected or removed; email code and password stay.

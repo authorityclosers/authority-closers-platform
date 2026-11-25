@@ -62,6 +62,7 @@ export type SettingsSectionId =
   | "developers"
   | "pulse"
   | "devices"
+  | "call-uploads"
   | "help";
 
 export type SettingsGroup =
@@ -188,8 +189,8 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   {
     // Owner, 25 Oct 2026: an organisation links its Pulse org.
     id: "pulse",
-    label: "Pulse",
-    hint: "Your team's profiles from Pulse, and what you share with it",
+    label: "Vitals OS",
+    hint: "Your team's profiles from Vitals OS, and what you share with it",
     icon: Link2,
     group: "Connections",
     needs: "org.manage",
@@ -259,7 +260,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     // (Pulse, ChatGPT, Claude) had no screen; everyone, members too.
     id: "ai-apps",
     label: "AI apps",
-    hint: "ChatGPT, Claude and Pulse with your calls and leads",
+    hint: "ChatGPT, Claude and Vitals OS with your calls and leads",
     icon: Sparkles,
     group: "Just me",
   },
@@ -285,6 +286,15 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     label: "Phone & alerts",
     hint: "Phone setup, alerts, vibration and usage analytics",
     icon: BellRing,
+    group: "This phone",
+  },
+  {
+    // SX-AUTOUPLOAD (owner, 25 Nov 2026: "fix that feature"): whether this phone's lead calls upload by
+    // themselves, the last one, what waits and what failed (Retry), the folder and mobile data.
+    id: "call-uploads",
+    label: "Call uploads",
+    hint: "Last upload, waiting and failed calls, recordings folder",
+    icon: PhoneCall,
     group: "This phone",
   },
   {

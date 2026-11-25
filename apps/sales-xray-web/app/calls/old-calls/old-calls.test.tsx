@@ -96,10 +96,10 @@ it("joins only the server's calls without a recording to the phone's matches", (
   expect(parseFound({ nope: 1 })).toBeNull();
 });
 
-it("looks back 14 India days and keeps each missing call once", () => {
+it("looks back 30 India days and keeps each missing call once", () => {
   const days = lookBackDays(new Date("2026-11-20T20:00:00Z"));
   expect(days[0]).toBe("2026-11-21");
-  expect(days).toHaveLength(14);
+  expect(days).toHaveLength(30);
   expect(mergeMissing([missing, missing.slice(0, 1), null])).toHaveLength(3);
 });
 
@@ -249,7 +249,30 @@ it("asks once, with nothing ticked, when automatic analysis is off", async () =>
   );
 });
 
+it("first look under standing consent shows the count and asks once; nothing goes up before the tap", async () => {
+  localStorage.removeItem("sx:old-calls:agreed");
+  vi.mocked(scanOldCalls).mockResolvedValue(scanned());
+  vi.mocked(readAutoAnalysis).mockResolvedValue({
+    schema: "sales-xray-auto-analysis/1",
+    state: "on",
+    can_start: true,
+  });
+  act(() =>
+    root.render(<OldCallsSheet open entry="card" onClose={() => undefined} />),
+  );
+  await settle();
+  expect(runRecordingUpload).not.toHaveBeenCalled();
+  const all = button(/Analyse all 3/);
+  expect(all?.disabled).toBe(false);
+  act(() => all!.click());
+  await settle();
+  expect(runRecordingUpload).toHaveBeenCalledTimes(3);
+  expect(localStorage.getItem("sx:old-calls:agreed")).not.toBeNull();
+});
+
 it("analyses sure and likely matches by itself under standing consent, never the time-only one", async () => {
+  // The seller chose once before on this phone; from then on it is continuous.
+  localStorage.setItem("sx:old-calls:agreed", "1");
   vi.mocked(scanOldCalls).mockResolvedValue(scanned());
   vi.mocked(readAutoAnalysis).mockResolvedValue({
     schema: "sales-xray-auto-analysis/1",

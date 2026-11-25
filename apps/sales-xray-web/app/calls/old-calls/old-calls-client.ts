@@ -37,6 +37,8 @@ export type ScanOutcome =
 
 const HANDLED = "sx:old-calls:handled";
 const LOOKED = "sx:old-calls:looked";
+/** The seller chose once to analyse found old calls (SX-AUTOUPLOAD, owner 25 Nov 2026: "show the count and ask once"). */
+const AGREED = "sx:old-calls:agreed";
 const HANDLED_MAX = 500;
 
 /** Run `work` over `items`, `limit` at a time. */
@@ -160,6 +162,27 @@ export function readLooked(): number | null {
     return Number.isFinite(raw) && raw > 0 ? raw : null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Whether the seller already chose, on this phone, to analyse old calls found here (owner, 25 Nov 2026: "First
+ * run: last 30 days (show the count and ask once before uploading); then continuous"). Until then, even with
+ * Analyse my calls automatically on, the first look shows the count and waits for a tap.
+ */
+export function readAgreed(): boolean {
+  try {
+    return localStorage.getItem(AGREED) !== null;
+  } catch {
+    return false;
+  }
+}
+
+export function markAgreed(at: number = Date.now()): void {
+  try {
+    localStorage.setItem(AGREED, String(at));
+  } catch {
+    // Nothing kept: the next look asks again, nothing goes up without a tap.
   }
 }
 

@@ -44,7 +44,9 @@ class Edge(BaseHTTPRequestHandler):
         url = urlsplit(self.path)
         if url.path == Edge.broken:
             return self._answer(502)
-        if host in {"salesxray.in", "www.salesxray.in"} or (
+        if host == "www.salesxray.in":
+            return self._answer(301, Location=f"https://salesxray.in{self.path}")
+        if host == "salesxray.in" or (
             host in {API, MCP}
             and not url.path.startswith(("/v1", "/.well-known/oauth-protected-resource"))
         ):

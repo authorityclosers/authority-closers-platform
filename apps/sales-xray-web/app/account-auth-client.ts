@@ -7,7 +7,7 @@ export type EmailCodeConfig = {
   /** Each provider shows only once its settings exist on the server. */
   apple_enabled: boolean;
   facebook_enabled: boolean;
-  /** Sign in with Pulse (Estate Autopilots' work app), once set up here. */
+  /** Sign in with Vitals OS (formerly Pulse, our work app), once set up here. */
   pulse_enabled: boolean;
   expires_in_seconds: number;
   resend_after_seconds: number;
@@ -455,7 +455,7 @@ export function providerLabel(provider: SignInProvider) {
     : provider === "apple"
       ? "Apple"
       : provider === "pulse"
-        ? "Pulse"
+        ? "Vitals OS"
         : "Facebook";
 }
 

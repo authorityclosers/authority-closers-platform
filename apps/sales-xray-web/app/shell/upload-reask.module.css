@@ -1,0 +1,12 @@
+/* "Your call wasn't checked" (owner, 17 Nov 2026): the missed-alert card's look
+   (missed-alert.module.css); only its step glyphs are its own. */
+
+.notices {
+  --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z'/%3E%3Cpath d='M10 20a2 2 0 0 0 4 0'/%3E%3C/svg%3E");
+}
+.folder {
+  --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/%3E%3Cpath d='M12 11v4'/%3E%3Ccircle cx='10.5' cy='15' r='1.5'/%3E%3C/svg%3E");
+}
+.uploads {
+  --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 18H6a4 4 0 0 1-.5-8A5.5 5.5 0 0 1 16 8.5 4 4 0 0 1 18 18h-1'/%3E%3Cpath d='M12 20v-8m-3 3l3-3 3 3'/%3E%3C/svg%3E");
+}

@@ -179,6 +179,27 @@ it("returns to the staged call with the same selected file and no navigation", a
   expect(fetcher).not.toHaveBeenCalled();
 });
 
+it("gives the signed-out sign-in page a way back on the web and in the phone app", async () => {
+  // Device test, iPhone app, 25 Nov 2026: Sign in was a dead end in the app.
+  vi.stubGlobal("fetch", vi.fn());
+  await act(async () =>
+    root.render(
+      <ThemeProvider controlEnabled>
+        <AccountAuth onAuthenticated={vi.fn()} previewState="auth.email" />
+      </ThemeProvider>,
+    ),
+  );
+  await flush();
+  const back = Array.from(
+    host.querySelectorAll<HTMLAnchorElement>("a[href='/']"),
+  ).map((link) => [link.textContent?.trim(), link.className]);
+  expect(back).toContainEqual([
+    "Back to Home",
+    expect.stringContaining("sx-web-only"),
+  ]);
+  expect(back).toContainEqual(["Back", expect.stringContaining("sx-app-only")]);
+});
+
 it("keeps the theme switch in its own slot so phones can float it onto the banner", async () => {
   vi.stubGlobal("fetch", vi.fn());
   await act(async () =>
@@ -1007,16 +1028,18 @@ describe("Apple and Facebook next to Google", () => {
       "Continue with Google",
       "Continue with Apple",
       "Continue with Facebook",
-      "Continue with Pulse",
+      "Continue with Vitals OS",
     ]);
     await act(async () =>
       host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click(),
     );
-    await click("Continue with Pulse");
+    await click("Continue with Vitals OS");
     const started = new URL(assign.mock.calls[0][0], window.location.origin);
     expect(started.pathname).toBe("/v1/auth/pulse/start");
     expect(started.searchParams.get("action")).toBe("authenticate");
-    expect(host.textContent).toContain("Finish sign-in in the Pulse window.");
+    expect(host.textContent).toContain(
+      "Finish sign-in in the Vitals OS window.",
+    );
   });
 
   it("tells an older phone app to update before Apple or Facebook, and never opens a window", async () => {
@@ -1438,7 +1461,7 @@ describe("inside the iPhone app", () => {
       "Continue with Google",
       "Continue with Apple",
       "Continue with Facebook",
-      "Continue with Pulse",
+      "Continue with Vitals OS",
     ]);
   });
 
@@ -1447,7 +1470,7 @@ describe("inside the iPhone app", () => {
       expect(await signInButtons(userAgent, noApple)).toEqual([
         "Continue with Google",
         "Continue with Facebook",
-        "Continue with Pulse",
+        "Continue with Vitals OS",
       ]);
       await act(async () => root.unmount());
       root = createRoot(host);

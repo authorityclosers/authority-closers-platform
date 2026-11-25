@@ -646,6 +646,17 @@ def seconds_from(data: Mapping[str, Any]) -> str | None:
     return "recording"
 
 
+def _same_call(lead_id: UUID, at: datetime, data: Mapping[str, Any]) -> tuple[UUID, int, str, int]:
+    """One phone-logged call, whichever phone or call-history row sent it: its lead, start
+    second, direction and length."""
+    return (
+        lead_id,
+        int(at.timestamp()),
+        str(data.get("direction") or ""),
+        int(data.get("duration_seconds") or 0),
+    )
+
+
 def dial_start(at: datetime, data: Mapping[str, Any]) -> datetime:
     """When a Call-button dial began: its row is written on the way back, its seconds later."""
     return at - timedelta(seconds=max(0, int(data.get("duration_seconds") or 0)))
@@ -6145,6 +6156,30 @@ class LeadDesk:
                     data.get("via") == "phone" or data.get("recording") or data.get("simulated")
                 ):
                     in_app.setdefault(lead_id, []).append((at, event_id, data))
+        # The same call already logged from another of my phones (a reinstall or a second
+        # device sends the same history under a new device id) or from another row of this
+        # one: same lead, same start second, direction and length. It is one call, never two
+        # (WL-SX-ACTIVITY, 23 Nov 2026: a phone's calls were stored twice, same second).
+        logged_at: dict[tuple[UUID, int, str, int], UUID] = {}
+        if leads and fresh:
+            starts = [min(call.started_at, self.now) for _, call, _ in fresh]
+            for event_id, lead_id, at, data in (
+                await self.db.execute(
+                    select(
+                        LeadEvent.id, LeadEvent.lead_id, LeadEvent.created_at, LeadEvent.data
+                    ).where(
+                        LeadEvent.tenant_id == self.tenant_id,
+                        LeadEvent.lead_id.in_([lead.id for lead in leads.values()]),
+                        LeadEvent.actor_person_id == self.viewer.person_id,
+                        LeadEvent.kind == "call",
+                        LeadEvent.data["via"].as_string() == "phone",
+                        LeadEvent.created_at >= min(starts) - timedelta(seconds=1),
+                        LeadEvent.created_at <= max(starts) + timedelta(seconds=1),
+                    )
+                )
+            ).all():
+                if isinstance(data, dict):
+                    logged_at[_same_call(lead_id, at, data)] = event_id
         # Log calls that are the app's own dials: the phone's seconds go beside the dial.
         timing: list[tuple[UUID, PhoneLogCall, Lead, UUID]] = []
         claimed: set[UUID] = set()
@@ -6213,6 +6248,22 @@ class LeadDesk:
                     timing.append((key, call, lead, dial))
                 continue
             talked = call.duration_seconds > 0 and call.direction in {"outgoing", "incoming"}
+            twin = _same_call(
+                lead.id,
+                min(start, self.now),
+                {"direction": call.direction, "duration_seconds": call.duration_seconds},
+            )
+            if (logged_before := logged_at.get(twin)) is not None:
+                already += 1
+                refs.append(
+                    PhoneLogged(
+                        log_id=call.log_id,
+                        lead_id=lead.id,
+                        event_id=logged_before,
+                        connected=talked,
+                    )
+                )
+                continue
             if call.direction == "outgoing" or talked:
                 lead.calls += 1
                 contact = max(start, lead.created_at)
@@ -6233,6 +6284,7 @@ class LeadDesk:
                 command_id=key,
                 at=min(start, self.now),
             )
+            logged_at[twin] = event.id
             refs.append(
                 PhoneLogged(
                     log_id=call.log_id, lead_id=lead.id, event_id=event.id, connected=talked

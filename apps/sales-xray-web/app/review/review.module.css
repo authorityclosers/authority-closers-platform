@@ -220,6 +220,9 @@
 .flow {
   box-sizing: border-box;
   display: grid;
+  /* v1.99: one column that may shrink to the phone; its own width followed the
+     widest content (the chips, the player), 40 px past a 320 px screen. */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(96px, 1fr) auto;
   gap: 8px;
   width: 100%;
@@ -240,6 +243,7 @@
 
 .top {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
 }
 

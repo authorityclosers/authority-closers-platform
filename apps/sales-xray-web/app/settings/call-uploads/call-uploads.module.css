@@ -1,0 +1,187 @@
+/* Call uploads (SX-AUTOUPLOAD, 25 Nov 2026): judged design U1 v01-2. White cards, 16 px inner padding, figures
+   right in tabular numbers; teal works, amber waits on the seller, red only for a failure with a tap. */
+.screen {
+  display: grid;
+  gap: 12px;
+}
+.card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  background: var(--sx-surface);
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  min-width: 0;
+}
+.head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.icon {
+  color: var(--sx-accent);
+}
+.card[data-tone="attention"] .icon,
+.card[data-tone="off"] .icon {
+  color: var(--sx-warn);
+}
+.card[data-tone="blocked"] .icon {
+  color: var(--sx-muted);
+}
+.title {
+  margin: 0;
+  font-size: var(--sx-text-xl);
+  line-height: var(--sx-leading-24);
+  font-weight: 500;
+  color: var(--sx-ink);
+  overflow-wrap: anywhere;
+}
+.line {
+  margin: 4px 0 0;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+  color: var(--sx-muted);
+  overflow-wrap: anywhere;
+}
+.primaryLink {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-accent);
+  color: var(--sx-primary-ink);
+  font-weight: 500;
+  text-decoration: none;
+  padding-inline: 20px;
+}
+.primaryLink:focus-visible,
+.rowLink:focus-visible,
+.setting:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+.steps {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+  color: var(--sx-ink-2);
+}
+.figures {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--sx-hairline);
+  padding-top: 12px;
+}
+.figures > div {
+  display: grid;
+  gap: 2px;
+  padding-inline: 12px;
+  min-width: 0;
+}
+.figures > div:first-child {
+  padding-left: 0;
+}
+.figures > div + div {
+  border-left: 1px solid var(--sx-hairline);
+}
+.figures dt {
+  font-size: var(--sx-text-xs);
+  color: var(--sx-muted);
+}
+.figures dd {
+  margin: 0;
+  font-size: var(--sx-text-xl);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--sx-ink);
+}
+.figures dd[data-tone="ok"] {
+  color: var(--sx-accent);
+}
+.figures dd[data-tone="bad"] {
+  color: var(--sx-bad);
+}
+.cardTitle {
+  margin: 0;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
+  color: var(--sx-ink);
+}
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.row {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 52px;
+}
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--sx-accent);
+}
+.dot[data-tone="bad"] {
+  background: var(--sx-bad);
+}
+.dot[data-tone="warn"] {
+  background: var(--sx-warn);
+}
+.rowText {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.rowText strong {
+  font-weight: 500;
+  font-size: var(--sx-text-sm);
+  color: var(--sx-ink);
+  overflow-wrap: anywhere;
+}
+.rowText small {
+  font-size: var(--sx-text-xs);
+  color: var(--sx-muted);
+  overflow-wrap: anywhere;
+}
+.rowLink {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--sx-accent);
+  text-decoration: none;
+  font-weight: 500;
+}
+.setting {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 56px;
+  border-top: 1px solid var(--sx-hairline);
+  padding-top: 8px;
+  color: inherit;
+  text-decoration: none;
+}
+/* Every tap target here is at least 44 px tall (the kit's ghost buttons are 40). */
+.screen button {
+  min-height: 44px;
+}
+.foot {
+  margin: 0;
+  padding-inline: 4px;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
+  color: var(--sx-muted);
+}

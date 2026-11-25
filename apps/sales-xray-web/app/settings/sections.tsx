@@ -35,6 +35,7 @@ import { NotificationPrefs } from "./notification-prefs";
 import { MicrophoneCard } from "../organisation/setup/microphone";
 import { PhoneSetupPanel, VibrationPanel } from "./phone-panel";
 import { PrivacySettings } from "./privacy";
+import { CallUploads } from "./call-uploads/call-uploads";
 import { ProfileDetailsPanel } from "./profile-details";
 import { SellingSettings } from "./selling";
 import { ThemePills } from "./theme-pills";
@@ -253,6 +254,8 @@ export function SettingsSectionView({
       return <PulsePanel />;
     case "notifications":
       return <PhoneAndAlerts />;
+    case "call-uploads":
+      return <CallUploads />;
     case "devices":
       return <AppsAndDevices />;
   }

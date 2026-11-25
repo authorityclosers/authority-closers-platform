@@ -1191,6 +1191,20 @@ export type AutoCaptureStatus = {
    * phone book; on and wifiOnly are then not known.
    */
   unanswered?: boolean;
+  /**
+   * The upload-status screen (SX-AUTOUPLOAD, apps #40, 25 Nov 2026); older builds leave these out.
+   * lastUploadAt: when this phone last sent a lead call (ms); lastUploadLead: that lead's name.
+   */
+  lastUploadAt?: number | null;
+  lastUploadLead?: string | null;
+  /** When the phone last looked for recordings (ms). */
+  lastScanAt?: number | null;
+  /** Held calls that won't go by themselves (Retry, or upload by hand). */
+  failed?: number;
+  /** The picked recordings folders, as paths ("MIUI/sound_recorder/call_rec"). */
+  folders?: string[];
+  /** The call history is read, so recordings named after a contact reach their lead call. */
+  callLogMatch?: boolean;
 };
 export async function autoCaptureStatus(): Promise<AutoCaptureStatus | null> {
   if (!inPhoneApp()) return null;
@@ -1263,7 +1277,31 @@ export async function autoCaptureRetry(): Promise<AutoCaptureStatus | null> {
   }
 }
 /** A call on the phone's upload queue; hold says why a held one waits (newer builds). */
-export type AutoCaptureItem = { eventId: string; state: string; hold?: string };
+export type AutoCaptureItem = {
+  eventId: string;
+  state: string;
+  hold?: string;
+  /** apps #40 (25 Nov 2026) and later: the job, its lead and times (ms), how it was matched. */
+  id?: string;
+  leadId?: string;
+  leadName?: string;
+  stamp?: number;
+  seconds?: number;
+  due?: number;
+  uploadedAt?: number;
+  matched?: "name" | "call_log";
+};
+/** Retry on one held call (the upload-status screen); null when the app can't (older builds). */
+export async function autoCaptureRetryOne(
+  id: string,
+): Promise<AutoCaptureStatus | null> {
+  if (!inPhoneApp()) return null;
+  try {
+    return await ask<AutoCaptureStatus>("autoCaptureRetryOne", { id }, 10_000);
+  } catch {
+    return null;
+  }
+}
 let captureStatesRead: Promise<AutoCaptureItem[]> | null = null;
 export async function autoCaptureStates(): Promise<AutoCaptureItem[]> {
   if (!inPhoneApp()) return [];

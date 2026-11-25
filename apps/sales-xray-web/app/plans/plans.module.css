@@ -108,6 +108,7 @@
   box-shadow: var(--lx-shadow-1);
 }
 
+.panel h1,
 .panel h2 {
   margin: 0;
   color: var(--lx-ink);
@@ -300,7 +301,7 @@
   justify-content: center;
   gap: 8px;
   width: 100%;
-  min-height: 42px;
+  min-height: 44px;
   padding: 10px 16px;
   border: 1px solid var(--lx-line-strong);
   border-radius: var(--lx-radius-sm, 10px);
@@ -477,8 +478,8 @@
 
 .stepper button {
   display: grid;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   place-items: center;
   border: 0;
   background: transparent;
@@ -1081,6 +1082,7 @@
     border-radius: 16px;
   }
 
+  .panel h1,
   .panel h2 {
     font-size: var(--sx-text-md);
   }
@@ -1621,7 +1623,7 @@
   flex-shrink: 0;
 }
 
-.ladderHeading h2 {
+.ladderHeading h1 {
   margin: 0;
   color: var(--lx-ink, #0f172a);
   font: 800 var(--sx-text-md) / var(--sx-leading-24)
@@ -2035,5 +2037,60 @@
 
   .receiptShort {
     display: inline;
+  }
+}
+
+/* The minutes left read as one unit: "(2 h 22 min)" broke after "(2". */
+.noBreak {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+/* Small phones (radar 25 Nov 2026, 320 px and large text): the top bar's
+   words ran into each other, the last plan tab ran past the edge and the
+   "Most popular" badge sat over the plan's name. */
+@media (max-width: 400px) {
+  .shellHeader {
+    gap: 8px;
+  }
+
+  .shellBrand {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .shellBrandName {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mobilePlanTabs {
+    gap: 4px;
+  }
+
+  .mobilePlanTabBtn {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 8px 4px;
+    letter-spacing: -0.01em;
+  }
+
+  /* The card's own "Most popular" badge says it; the star wrapped to a
+     second line and pushed Enterprise off the screen. */
+  .tabStar {
+    display: none;
+  }
+
+  .planCard .planBadge {
+    position: static;
+    align-self: flex-start;
+  }
+}
+
+/* Under 360 px the page's own heading names the screen: the bar keeps Back,
+   Receipts and Close. */
+@media (max-width: 359px) {
+  .shellBrand {
+    display: none;
   }
 }

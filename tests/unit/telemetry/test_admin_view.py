@@ -369,3 +369,29 @@ def test_counts_phones_holding_unsent_changes_from_each_persons_latest_report() 
         "oldest_min": None,
         "rows": [],
     }
+
+
+def test_the_upload_reask_funnel_counts_people_at_each_step() -> None:
+    # Owner, 17 Nov 2026: a call with no upload asks again; Admin measures how many turn on.
+    rows = [
+        _row("sx.feature_used", "a", feature="upload_reask_shown"),
+        _row("sx.feature_used", "b", feature="upload_reask_shown"),
+        _row("sx.feature_used", "a", feature="upload_reask_started"),
+        _row("sx.feature_used", "a", feature="upload_reask_on"),
+        # Turned on without being shown the card: not this funnel's.
+        _row("sx.feature_used", "c", feature="upload_reask_on"),
+    ]
+    view = overview(
+        Read(rows=rows, truncated=False),
+        now=NOW,
+        window="7d",
+        filters=Filters(),
+        consent={},
+        environment="development",
+    )
+    steps = next(item for item in view["funnels"] if item["key"] == "upload_reask")["steps"]
+    assert [(step["key"], step["people"], step["share"]) for step in steps] == [
+        ("shown", 2, 1.0),
+        ("started", 1, 0.5),
+        ("on", 1, 0.5),
+    ]

@@ -147,6 +147,22 @@
   white-space: nowrap;
 }
 
+/* v1.99: on a phone the four periods share the row in equal parts, so "All
+   time" is never cut at the screen's edge (320 px, bug radar). */
+@media (max-width: 479.98px) {
+  .filters [aria-label="Period"] {
+    display: grid;
+    box-sizing: border-box;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .filters [aria-label="Period"] button {
+    min-width: 0;
+    padding-inline: 4px;
+  }
+}
+
 .select {
   min-width: 0;
   max-width: 200px;
@@ -1507,7 +1523,7 @@ a.callTitle:hover {
 
 .page [role="group"][aria-label] > span[aria-hidden="true"] {
   border-radius: var(--sx-radius-pill);
-  background: var(--lx-home-emerald);
+  background: var(--sx-gloss);
   box-shadow: none;
 }
 

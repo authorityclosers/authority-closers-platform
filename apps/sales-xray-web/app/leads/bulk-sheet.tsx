@@ -128,7 +128,9 @@ export function BulkSheet({
     if (step !== "assign" || team !== null) return;
     const controller = new AbortController();
     readTeam(controller.signal).then(
-      (next) => setTeam(next.reps),
+      // A reply without people (an older server, a fixture) lists nobody
+      // rather than crashing the sheet (radar 25 Nov 2026: "Assign to…").
+      (next) => setTeam(Array.isArray(next?.reps) ? next.reps : []),
       () => {
         if (!controller.signal.aborted) setTeam([]);
       },
