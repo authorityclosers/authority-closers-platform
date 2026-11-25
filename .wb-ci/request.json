@@ -1,0 +1,26 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "98898ca62913587ca7575cad3e252f92c71760f1",
+  "full": false,
+  "checks": [
+    "web"
+  ],
+  "changed_files": [
+    "apps/sales-xray-web/app/calls/old-calls/old-calls-rules.ts",
+    "apps/sales-xray-web/app/calls/old-calls/old-calls-sheet.tsx",
+    "apps/sales-xray-web/app/calls/old-calls/old-calls.test.tsx",
+    "apps/sales-xray-web/app/leads/lead-sheet.tsx",
+    "apps/sales-xray-web/app/settings/auto-analysis-panel.tsx",
+    "apps/sales-xray-web/app/settings/resume-after-agreeing.test.ts",
+    "apps/sales-xray-web/app/settings/resume-after-agreeing.ts",
+    "packages/python/ac_platform/lead_desk/contracts.py",
+    "packages/python/ac_platform/lead_desk/hours.py",
+    "packages/python/ac_platform/lead_desk/store.py",
+    "tests/database/test_lead_desk_postgresql.py"
+  ],
+  "routes": [],
+  "py_tests": [],
+  "include_paths": [],
+  "py_shards": 17,
+  "requested_by": "acdev@ac-kvm4-prod"
+}
