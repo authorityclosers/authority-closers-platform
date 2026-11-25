@@ -717,6 +717,7 @@ jobs:
       # of the 2 GB artifact pool and expired about once a minute, so Root's complete-inventory read kept seeing the
       # count move (AUT-2185, AUT-2214). One artifact per run now; the shard folders keep their names inside it.
       - name: Fold this attempt's shard manifests into one artifact
+        id: fold
         if: needs.py-tests.result != 'skipped' && !contains(needs.plan.outputs.py_matrix, 'targeted')
         continue-on-error: true
         uses: actions/upload-artifact/merge@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -726,11 +727,15 @@ jobs:
           separate-directories: true
           delete-merged: true
           retention-days: 1
+      # After a good fold, only the folded artifact: the fold has just deleted the shard artifacts, and GitHub's
+      # listing can still show them for a while, so a wide pattern 404'd on them and failed the summary of runs
+      # whose every check was green (24 Nov 2026: four full runs in a row). A fold that failed leaves the shard
+      # artifacts in place: then those are read.
       - name: Download Python shard evidence
         if: needs.py-tests.result != 'skipped' && !contains(needs.plan.outputs.py_matrix, 'targeted')
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          pattern: wb-py-*-${{ github.sha }}-*
+          pattern: ${{ steps.fold.outcome == 'success' && format('wb-py-shards-{0}-{1}', github.sha, github.run_attempt) || format('wb-py-*-{0}-*', github.sha) }}
           path: ${{ runner.temp }}/wb-py
           merge-multiple: false
       - name: Verify every Python shard reported, family by family (the families partition the tests)
